@@ -7,9 +7,9 @@ import copy
 import send
 from math import sqrt
 import keyboard
-dt = 0.016666666666666666
+dt = 1/60
 class camera:
-    def __init__(self,width = 1920, hight =1080, FOV = 120,VIEWER_DISTANCE = 5):
+    def __init__(self,width = 1920, hight =1080, FOV = 120,VIEWER_DISTANCE = 0):
         self.width = width
         self.hight = hight
         self.FOV = FOV
@@ -22,7 +22,9 @@ class Vector3D:
     y: float = 0
     z: float = 0
 
-
+    def floor(self):
+        factor = 10 ** 5
+        return Vector3D(math.floor(self.x * factor) / factor,math.floor(self.y * factor) / factor,math.floor(self.x * factor) / factor)
     def __iadd__(self, other):
         if isinstance(other, Vector3D):
             self.x += other.x
@@ -36,10 +38,9 @@ class Vector3D:
             raise TypeError(f"Unsupported type for +=: {type(other)}")
         return self
 
-    def __copy__(self):
-        return Vector3D(self.x,self.y,self.z)
+
     def __neg__(self):
-        return Rotation(-self.x, -self.y, -self.z)
+        return Vector3D(-self.x, -self.y, -self.z)
     def __add__(self, other):
         if isinstance(other, Vector3D):
             return Vector3D(self.x + other.x, self.y + other.y, self.z + other.z)
@@ -54,6 +55,9 @@ class Vector3D:
 
     def __truediv__(self, other):
         if isinstance(other, Vector3D):
+            if other.x == 0 or other.y == 0 or other.z == 0:
+                raise ZeroDivisionError("Division by zero in vector components")
+
             return Vector3D(
                 self.x / other.x if other.x != 0 else 0,
                 self.y / other.y if other.y != 0 else 0,
@@ -69,7 +73,8 @@ class Vector3D:
         elif isinstance(other, Vector3D):
             return Vector3D(self.x * other.x, self.y * other.y, self.z * other.z)
         raise TypeError("Unsupported type for multiplication")
-
+    def __copy__(self):
+        return Vector3D(self.x,self.y,self.z)
     def dis(self, other: 'Vector3D') -> float:
         dx = self.x - other.x
         dy = self.y - other.y
@@ -321,7 +326,7 @@ class BoxCollider:
         ]
 
         # Rotate and translate to world space
-        world_corners = [rotate_vector(corner, self.obj.position, self.obj.quaternion) + self.obj.position for corner in
+        world_corners = [rotate_vector_old(corner, self.obj.position, self.obj.rotation) + self.obj.position for corner in
                          local_corners]
 
         # Find min/max of all corners
@@ -382,13 +387,47 @@ class BoxCollider:
                 [2 * (xz - wy), 2 * (yz + wx), 1 - 2 * (xx + yy)]
             ])
 
-        def get_axes(rotation_quaternion):
-            R = quaternion_to_rotation_matrix(rotation_quaternion)
+        def euler_to_rotation_matrix(euler):
+            """
+            euler: Vector3D with x=roll, y=pitch, z=yaw, in radians
+            """
+            cx = math.cos(euler.x)
+            sx = math.sin(euler.x)
+            cy = math.cos(euler.y)
+            sy = math.sin(euler.y)
+            cz = math.cos(euler.z)
+            sz = math.sin(euler.z)
 
-            right = Vector3D(*R[:, 0])  # First column
-            up = Vector3D(*R[:, 1])  # Second column
-            forward = Vector3D(*R[:, 2])  # Third column
+            R_x = np.array([
+                [1, 0, 0],
+                [0, cx, -sx],
+                [0, sx, cx]
+            ])
 
+            R_y = np.array([
+                [cy, 0, sy],
+                [0, 1, 0],
+                [-sy, 0, cy]
+            ])
+
+            R_z = np.array([
+                [cz, -sz, 0],
+                [sz, cz, 0],
+                [0, 0, 1]
+            ])
+
+            # Combine rotations: R = Rz * Ry * Rx
+            R = R_z @ R_y @ R_x
+            return R
+        def get_axes(rotation):
+            # R = euler_to_rotation_matrix(rotation_quaternion)
+            #
+            # right = Vector3D(*R[:, 0])  # First column
+            # up = Vector3D(*R[:, 1])  # Second column
+            # forward = Vector3D(*R[:, 2])  # Third column
+            right = rotate_vector_old(Vector3D(1, 0, 0), Vector3D(0, 0, 0), rotation).normalized()
+            up = rotate_vector_old(Vector3D(0, 1, 0), Vector3D(0, 0, 0), rotation).normalized()
+            forward = rotate_vector_old(Vector3D(0, 0, 1), Vector3D(0, 0, 0), rotation).normalized()
             return [right, up, forward]
 
         def project_box(center, axes, half_sizes, axis):
@@ -404,8 +443,8 @@ class BoxCollider:
         a_center = self.obj.position
         b_center = other_collider.obj.position
 
-        a_axes = get_axes(self.obj.quaternion)
-        b_axes = get_axes(other_collider.obj.quaternion)
+        a_axes = get_axes(self.obj.rotation)
+        b_axes = get_axes(other_collider.obj.rotation)
 
         a_half = self.obj.size * 0.5
         b_half = other_collider.obj.size * 0.5
@@ -482,6 +521,7 @@ class Rigidbody:
         self.isKinematic = isKinematic
         self.useGravity = useGravity
         self.angular_velocity = angular_velocity
+        self.normal_force = Vector3D()
         if self.obj != None:
             self.inertia = Vector3D(
                 (1 / 12) * self.mass * (self.obj.size.y ** 2 + self.obj.size.z ** 2),  # I_x
@@ -492,10 +532,6 @@ class Rigidbody:
     def exert_force(self, force):
         # F = ma ⇒ a = F/m
         self.force += force
-        self.obj.update(dt = dt,physics=True)
-        # self.obj.integrat(dt)
-        # self.obj.integrat(dt)
-
     def accelerate(self, acceleration, dt=0.01):
         self.acceleration += acceleration
         self.obj.integrat2(dt)
@@ -526,11 +562,11 @@ class Rigidbody:
 
 import PPO
 class Joint:
-    def __init__(self, obj=None, other=None, position=None, rotation=None, look_position=True, look_rotation=False):
-        self.obj = obj
+    def __init__(self,other=None, position=None, rotation=None, look_position=True, look_rotation=False):
         self.other = other
         self.look_position = look_position
         self.look_rotation = look_rotation
+
 
 # class AgentController:
 #     def __init__(self, obj, goal, obs_dim=6, action_dim=4):
@@ -641,7 +677,7 @@ class Object:
             self.position = copy.copy(new_local_position)
         else:
             # Step 1: Rotate local position to world space using parent's rotation
-            rotated_offset = rotate_vector(new_local_position, Vector3D(0, 0, 0), self.parent.quaternion)
+            rotated_offset = rotate_vector_old(new_local_position, Vector3D(0, 0, 0), self.parent.rotation)
 
             # Step 2: Translate by parent position
             self.position = self.parent.position + rotated_offset
@@ -742,6 +778,7 @@ class Object:
         return None
 
     def add_component(self, name, component):
+
         if name == "rigidbody":
             if isinstance(component, tuple):
                 rb = Rigidbody(*component)
@@ -781,6 +818,7 @@ class Object:
                 joint = component
             else:
                 raise TypeError("Invalid type for Joint")
+            # joint.other.rigidbody.force = self.rigidbody.force
         elif name == "agent":
             if isinstance(component, tuple):
                 agent = PPO.Agent(*component)
@@ -791,6 +829,8 @@ class Object:
         # Save component
         self.components[name] = component
         component.parent = self  # optional back-reference
+        if hasattr(component, 'start') and component.start is not None:
+            component.start()
 
     def remove_component(self, name):
         if name in self.components:
@@ -907,14 +947,9 @@ class Object:
             all_bereshit.extend(child.get_all_colliders())
         return all_bereshit
 
-    def update(self, dt=0.01,physics=False):
-        if not physics:
-            for component in self.components.values():
-                if hasattr(component, 'main') and component.main is not None:
-                    component.main()
+    def Stage1(self,children):
 
         rb = self.get_component("rigidbody")
-        children = self.get_all_children_bereshit()
 
         center_of_mass = [self.position]
         if rb is not None:
@@ -924,15 +959,11 @@ class Object:
 
         if self.parent == None:  # the world does not need an update
             for child in children:
-                child.update(dt=dt)
+                child.Stage1(children)
             return
 
         if rb is None or rb.isKinematic:
             return
-
-        # # === 1) RESET ALL FORCES & TORQUES ===
-        # self.rigidbody.force = Vector3D(0, 0, 0)
-        # self.rigidbody.torque = Vector3D(0, 0, 0)
 
         # === 2) APPLY GRAVITY (AND TORSOUE DUE TO GRAVITY) ===
         if self.rigidbody.useGravity:
@@ -943,50 +974,147 @@ class Object:
             r = self.position - self.rigidbody.center_of_mass
             gravity_torque = r.cross(gravity * self.rigidbody.mass)
             self.rigidbody.torque += gravity_torque
+    def Stage2(self,children):
+        if self.parent == None:  # the world does not need an update
+            for child in children:
+                child.Stage2(children)
+            return
+        rb = self.get_component("rigidbody")
 
-        # === 3) COLLISION LOOP ===
-        # collisions_processed = set()
-        for child in self.world.get_all_children_bereshit():
-            if child != self:
-                if child not in children and child != self.parent and child.get_component("collider") is not None:
-                    # if id(child) in collisions_processed:
-                    #     continue
+        if rb is None or rb.isKinematic:
+            return
+        joint = self.get_component("joint")
+        if joint is not None:
+            # Get common acceleration
+            # Net force applied to both bodies
+            net_force = self.rigidbody.force + self.joint.other.rigidbody.force
 
-                    result = self.collider.check_collision(child)
-                    if result is None:
-                        continue  # No collision
-                    contact_point, normal = result#child.name == 'wall'
-                    normal_force = self.rigidbody.force.reduce_vector_along_direction(normal * -1) * -1
+            # Common acceleration both bodies should have
+            common_acceleration = net_force / (self.rigidbody.mass + self.joint.other.rigidbody.mass)
 
-                    # normal2 = contact_point.direction_vector(self.position)
-                    # Mark as processed
-                    # collisions_processed.add(id(child))
+            # What force each body *should* have to achieve this common acceleration
+            desired_force_self = common_acceleration * self.rigidbody.mass
+            desired_force_other = common_acceleration * self.joint.other.rigidbody.mass
 
-                    if child.get_component("rigidbody") is None or child.rigidbody.isKinematic:
-                        self.resolve_kinematic_collision(child, normal, contact_point, normal_force)
-                    else:
-                        self.resolve_dynamic_collision(child, normal, contact_point, normal_force)
-                    # === After updating velocity with all forces ===
+            # Compute the difference between the actual forces and desired forces
+            correction_self = (desired_force_self - self.rigidbody.force)
+            correction_other =( desired_force_other - self.joint.other.rigidbody.force)
 
-                    self.apply_friction(normal_force, dt)
+            # Applying corrections
+            self.rigidbody.force += correction_self
+            self.joint.other.rigidbody.force += correction_other
 
+    # def Stage3(self,children):
+    #
+    #
+    #     if self.parent == None:  # the world does not need an update
+    #         for child in children:
+    #             child.Stage3(children)
+    #         return
+    #     rb = self.get_component("rigidbody")
+    #
+    #     if rb is None or rb.isKinematic:
+    #         return
+    #     total_normal_force = Vector3D(0,0,0)
+    #     for child in children:
+    #         joint = child.get_component('joint')
+    #         joint2 = self.get_component('joint')
+    #
+    #         # if child == self:
+    #         if child.get_component("collider") is not None and child != self:#
+    #             joint = self.get_component("joint")
+    #             # if joint and joint.other == child:
+    #             #     continue  # Skip collision with joined body
+    #
+    #             # if joint and joint.other == self or joint2 and joint2.other == child:
+    #             #     continue
+    #             result = self.collider.check_collision(child)
+    #             if result is None:
+    #                 # rb.force *= 0.8
+    #                 continue  # No collision
+    #             contact_point, normal = result
+    #             normal_force = self.rigidbody.force.reduce_vector_along_direction(normal * -1) * -1
+    #             normal_force = normal * self.rigidbody.force * -1
+    #             total_normal_force += normal_force
+    #             if child.get_component("rigidbody") is None or child.rigidbody.isKinematic:
+    #                 self.resolve_kinematic_collision(child, normal, contact_point, normal_force)
+    #             else:
+    #                 self.resolve_dynamic_collision(child, normal, contact_point, normal_force)
+    #             # === After updating velocity with all forces ===
+    #
+    #     if total_normal_force != Vector3D(0,0,0):
+    #         self.apply_friction(total_normal_force, dt)
+    #     print()
 
-                    # self.integrat(dt)
-        self.integrat(dt)
+    def Stage3(self, children):
+
+        if self.parent == None:  # the world does not need an update
+            for child in children:
+                child.Stage3(children)
+            return
+        rb = self.get_component("rigidbody")
+
+        if rb is None or rb.isKinematic:
+            return
+        normal_forces = Vector3D()
         for child in children:
-            child.update(dt=dt)
-        # === 1) RESET ALL FORCES & TORQUES ===
-        self.rigidbody.force = Vector3D(0, 0, 0)
-        self.rigidbody.torque = Vector3D(0, 0, 0)
+            if child == self:
+                continue  # Skip self
+
+            if child.get_component("collider") is None:
+                continue  # No collider to check against
+
+            result = self.collider.check_collision(child)
+            if result is None:
+                continue  # No collision
+
+            contact_point, normal = result
+
+            # Project the force onto the collision normal
+            force_along_normal = normal * rb.force.dot(normal) * -1
+
+            normal_forces += force_along_normal
+            if child.get_component("rigidbody") is None or child.rigidbody.isKinematic:
+                self.resolve_kinematic_collision(child, normal, contact_point, force_along_normal)
+            else:
+                self.resolve_dynamic_collision(child, normal, contact_point, force_along_normal)
+
+        rb.normal_forces = normal_forces
+
+    def Stage4(self, children):
+
+        if self.parent == None:  # the world does not need an update
+            for child in children:
+                child.Stage4(children)
+            return
+        rb = self.get_component("rigidbody")
+
+        if rb is None or rb.isKinematic:
+            return
+        rb.force += rb.normal_forces
+        if rb.normal_forces != Vector3D(0, 0, 0):
+            self.apply_friction(rb.normal_forces, dt)
+        rb.normal_forces = Vector3D()
+
+    def update(self, dt,chack =True):
+        children = self.get_all_children_bereshit()
+        if chack :
+            for child in children:
+                for component in child.components.values():
+                        if hasattr(component, 'main') and component.main is not None:
+                            component.main()
+
+        self.Stage1(children) # APPLY GRAVITY and external forces
+        self.Stage2(children) # handel joints
+        self.Stage3(children) # handel collins and normal forces
+        self.Stage4(children) # handel friction
+        for child in children:
+            rb = child.get_component("rigidbody")
+            if rb is not None:
+                child.integrat(dt)
 
     def resolve_kinematic_collision(self, child, normal, contact_point, normal_force):
-        # self.collider.Positional_correction(child.collider)
-
-        # normal_force = rotate_vector(vector=gravity * self.rigidbody.mass * -1, pivot=Vector3D(0, 0, 0),
-        #                              angles=child.rotation)
-        # normal_force = rotate_vector(vector=self.rigidbody.force * -1, pivot=Vector3D(0, 0, 0),
-        #                              angles=direction_to_angles(normal))
-        self.rigidbody.force += normal_force
+        # self.rigidbody.force += normal_force
         if child.get_component("rigidbody") is None:
             e = self.rigidbody.restitution  # Coefficient of restitution (e = 0: perfectly inelastic, e = 1: elastic)
             v2_n = 0  # still allowed, but v2_n should be constant
@@ -1025,9 +1153,9 @@ class Object:
 
 
 
-        self.rigidbody.force += normal_force
+        # self.rigidbody.force += normal_force
 
-        child.rigidbody.force -= normal_force  # Equal and opposite
+        # child.rigidbody.force -= normal_force  # Equal and opposite
 
         e = min(self.rigidbody.restitution, child.rigidbody.restitution)
 
@@ -1086,21 +1214,28 @@ class Object:
 
     def apply_friction(self, normal_force, dt):
         rb = self.rigidbody
+        friction_limit = normal_force.magnitude() * rb.friction_coefficient
+
         if rb.velocity.magnitude() > 0:
+            # Body is sliding, apply kinetic friction
             d = rb.velocity.normalized() * -1
-            friction_acc = d * (normal_force.magnitude() * rb.friction_coefficient / rb.mass)
+            friction_acc = d * (friction_limit / rb.mass)
             new_velocity = rb.velocity + friction_acc * dt
             if new_velocity.dot(rb.velocity) <= 0:
                 rb.velocity = Vector3D(0, 0, 0)
             else:
                 rb.velocity = new_velocity
 
-        if rb.force.magnitude() > 0:
+        elif rb.force.magnitude() > 0:
+            # Body is at rest, apply static friction
             d = rb.force.normalized() * -1
-            friction_magnitude = normal_force.magnitude() * rb.friction_coefficient
             applied_force_magnitude = rb.force.magnitude()
-            max_friction = min(friction_magnitude, applied_force_magnitude)
-            rb.force += d * max_friction
+            if applied_force_magnitude <= friction_limit:
+                # Static friction cancels all force
+                rb.force = Vector3D(0, 0, 0)
+            else:
+                # Static friction resists up to limit, remainder causes movement
+                rb.force += d * friction_limit
 
     def integrat(self, dt):
 
@@ -1121,69 +1256,63 @@ class Object:
         # 4.3) Integrate rotation
         ang_disp = self.rigidbody.angular_velocity * dt \
                    + 0.5 * self.rigidbody.angular_acceleration * dt * dt
-        if self.get_component("joint") != None:
-            if not self.joint.look_position:
-                # 4.4) Integrate position
 
-                self.position += self.rigidbody.velocity * dt \
-                                 + 0.5 * self.rigidbody.acceleration * dt * dt
-                # self.set_position(self.position)
-            if not self.joint.look_rotation:
-                self.add_rotation(ang_disp)
-        else:
-            # 4.4) Integrate position
-            self.position += self.rigidbody.velocity * dt \
-                             + 0.5 * self.rigidbody.acceleration * dt * dt
+        self.position += self.rigidbody.velocity * dt \
+                         + 0.5 * self.rigidbody.acceleration * dt * dt
+        self.rigidbody.force = Vector3D(0, 0, 0)
+        # self.rigidbody.torque = Vector3D(0, 0, 0)
+        # self.add_rotation(ang_disp)
 
-            # self.set_position(self.position)
-
-            self.add_rotation(ang_disp)
-
+        # if self.get_component("joint") != None:
+        #     if self.joint.look_position:
+        #         self.joint.other.position += self.rigidbody.velocity * dt \
+        #                          + 0.5 * self.rigidbody.acceleration * dt * dt
         # 4.5) Angular damping
         # self.rigidbody.angular_velocity *= 0.98
 
         # 4.6) Reset torques for next frame
+
         self.rigidbody.angular_acceleration = Vector3D(0, 0, 0)
         self.rigidbody.torque = Vector3D(0, 0, 0)
-    def integrat2(self, dt):
-
-        # === 4) INTEGRATION PHASE ===
-        self.rigidbody.velocity += self.rigidbody.acceleration * dt
-        # 4.2) Angular acceleration & velocity (component‐wise):
-        self.rigidbody.angular_acceleration = Vector3D(
-            self.rigidbody.torque.x / self.rigidbody.inertia.x if self.rigidbody.inertia.x != 0 else 0,
-            self.rigidbody.torque.y / self.rigidbody.inertia.y if self.rigidbody.inertia.y != 0 else 0,
-            self.rigidbody.torque.z / self.rigidbody.inertia.z if self.rigidbody.inertia.z != 0 else 0
-        )
-        self.rigidbody.angular_velocity += self.rigidbody.angular_acceleration * dt
-
-        # 4.3) Integrate rotation
-        ang_disp = self.rigidbody.angular_velocity * dt \
-                   + 0.5 * self.rigidbody.angular_acceleration * dt * dt
-        if self.get_component("joint") != None:
-            if not self.joint.look_position:
-                # 4.4) Integrate position
-
-                self.position += self.rigidbody.velocity * dt \
-                                 + 0.5 * self.rigidbody.acceleration * dt * dt
-                self.set_position(self.position)
-            if not self.joint.look_rotation:
-                self.add_rotation(ang_disp)
-        else:
-            # 4.4) Integrate position
-            self.position += self.rigidbody.velocity * dt \
-                             + 0.5 * self.rigidbody.acceleration * dt * dt
-
-            self.set_position(self.position)
-
-            self.add_rotation(ang_disp)
-
-        # 4.5) Angular damping
-        # self.rigidbody.angular_velocity *= 0.98
-
-        # 4.6) Reset torques for next frame
-        self.rigidbody.angular_acceleration = Vector3D(0, 0, 0)
-        self.rigidbody.torque = Vector3D(0, 0, 0)
+    # def integrat2(self, dt):
+    #
+    #     # === 4) INTEGRATION PHASE ===
+    #     self.rigidbody.velocity += self.rigidbody.acceleration * dt
+    #     # 4.2) Angular acceleration & velocity (component‐wise):
+    #     self.rigidbody.angular_acceleration = Vector3D(
+    #         self.rigidbody.torque.x / self.rigidbody.inertia.x if self.rigidbody.inertia.x != 0 else 0,
+    #         self.rigidbody.torque.y / self.rigidbody.inertia.y if self.rigidbody.inertia.y != 0 else 0,
+    #         self.rigidbody.torque.z / self.rigidbody.inertia.z if self.rigidbody.inertia.z != 0 else 0
+    #     )
+    #     self.rigidbody.angular_velocity += self.rigidbody.angular_acceleration * dt
+    #
+    #     # 4.3) Integrate rotation
+    #     ang_disp = self.rigidbody.angular_velocity * dt \
+    #                + 0.5 * self.rigidbody.angular_acceleration * dt * dt
+    #     if self.get_component("joint") != None:
+    #         if not self.joint.look_position:
+    #             # 4.4) Integrate position
+    #
+    #             self.position += self.rigidbody.velocity * dt \
+    #                              + 0.5 * self.rigidbody.acceleration * dt * dt
+    #             self.set_position(self.position)
+    #         if not self.joint.look_rotation:
+    #             self.add_rotation(ang_disp)
+    #     else:
+    #         # 4.4) Integrate position
+    #         self.position += self.rigidbody.velocity * dt \
+    #                          + 0.5 * self.rigidbody.acceleration * dt * dt
+    #
+    #         self.set_position(self.position)
+    #
+    #         self.add_rotation(ang_disp)
+    #
+    #     # 4.5) Angular damping
+    #     # self.rigidbody.angular_velocity *= 0.98
+    #
+    #     # 4.6) Reset torques for next frame
+    #     self.rigidbody.angular_acceleration = Vector3D(0, 0, 0)
+    #     self.rigidbody.torque = Vector3D(0, 0, 0)
 
     # def set_local_position(self):
     #     for child in self.children:
@@ -1234,7 +1363,7 @@ class Object:
                                            self.rotation.y,
                                            self.rotation.z)
 
-    def add_rotation(self, delta: Vector3D):
+    def add_rotation(self, delta: Vector3D,forall=False):
         """
         Add an incremental rotation `delta` (world‐space Euler angles)
         on top of the current world rotation. Then update local_rotation.
@@ -1248,6 +1377,28 @@ class Object:
 
         # 2. Delegate to set_rotation to keep local_rotation in sync
         self.set_rotation(new_world_rot)
+        if forall:
+            self._set_rotation_recursive(delta)
+            self.set_projection(delta)
+
+    def _set_rotation_recursive(self, delta):
+        for child in self.children:
+            target = child.obj if isinstance(child, Servo) else child
+            target.rotation += delta
+            target._set_rotation_recursive(delta)
+
+    def update_world_transform(self):
+        if self.parent is None:
+            self.rotation = self.local_rotation
+            self.position = self.local_position
+        else:
+            self.rotation = self.parent.rotation * self.local_rotation
+            rotated_local = rotate_vector_old(self.local_position,Vector3D(0,0,0), self.parent.rotation)
+            self.position = self.parent.position + rotated_local
+
+        # Recursively update children
+        for child in self.children:
+            child.update_world_transform()
 
     def add_rotation_old(self, rotation):
         self.set_rotation(self.rotation + rotation)
@@ -1260,23 +1411,19 @@ class Object:
     #         self._set_rotation_recursive(delta)
     #         # self.set_projection()
 
-    def _set_rotation_recursive(self, delta):
+
+
+    def set_projection(self, pivot=np.array([0, 0, 0])):
         for child in self.children:
             target = child.obj if isinstance(child, Servo) else child
-            target.rotation += delta
-            target._set_rotation_recursive(delta)
-
-    # def set_projection(self, pivot=np.array([0, 0, 0])):
-    #     for child in self.children:
-    #         target = child.obj if isinstance(child, Servo) else child
-    #         vector = np.array([target.position.x, target.position.y, target.position.z])
-    #         if np.allclose(pivot, [0, 0, 0]):
-    #             pivot = np.array([target.parent.position.x, target.parent.position.y, target.parent.position.z])
-    #         angles = (target.parent.local_rotation.x, target.parent.local_rotation.y, target.parent.local_rotation.z)
-    #         rotated = rotate_vector(vector, pivot, angles)
-    #         # target.set_position(Vector3D(*rotated))
-    #         target.position = Vector3D(*rotated)
-    #         target.set_projection(pivot=pivot)
+            vector = target.position
+            # if np.allclose(pivot, [0, 0, 0]):
+            pivot = target.parent.position
+            angles = target.parent.local_rotation
+            rotated = rotate_vector_old(vector, pivot, angles)
+            # target.set_position(Vector3D(*rotated))
+            target.position = Vector3D(*rotated)
+            target.set_projection(pivot=pivot)
 
     def find_center_of_gravity(self):
         bereshit = self.get_all_children_bereshit()
@@ -1324,7 +1471,7 @@ class Object:
 
     def __repr__(self):
         children_repr = ",\n    ".join(repr(child) for child in self.children)
-        return (f"Object(\n"
+        return (f"{self.name}(\n"
                 f"  Position={self.position},\n"
                 f"  Rotation={self.rotation},\n"
                 f"  Size={self.size},\n"
