@@ -22,11 +22,11 @@ class moveToGoal:
     def On_episode_begin(self):
         # world.reset_to_default()
         self.parent.parent.reset_to_default()
-        self.parent.movetogoal.goal.local_position = bereshit.Vector3D(random.uniform(-5, 5), 0.5,
+        self.parent.movetogoal.goal.local_position = bereshit.Vector3(random.uniform(-5, 5), 0.5,
                                                                        random.uniform(-5, 5))
     def apply_continuous_action(self, action):
         # action is a numpy array like [fx, fy, fz]
-        force = bereshit.Vector3D(action[0], 0, action[1]) * 100 * (bereshit.dt * 100)
+        force = bereshit.Vector3(action[0], 0, action[1]) * 100 * (bereshit.dt * 100)
         self.parent.rigidbody.exert_force(force)
     def main(self):
         global episode, UPDATE_INTERVAL

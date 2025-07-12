@@ -56,7 +56,7 @@ camera.add_component('camController',CamController.CamController())
 
 world = bereshit.Object(position=(0, 0, 0), size=(0, 0, 0), children=[scene,camera],name="world")
 
-# scene.add_rotation(bereshit.Vector3D(0,0,45),forall=True)
+# scene.add_rotation(bereshit.Vector3(0,0,45),forall=True)
 
 bereshit.dt = 1/120
 startg = time.time()
