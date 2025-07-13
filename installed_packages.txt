@@ -1,0 +1,19 @@
+# packages in environment at C:\Users\yaly\miniconda3\envs\robot-gpu:
+#
+# Name                    Version                   Build  Channel
+
+
+
+keyboard                  0.13.5                   pypi_0    pypi
+mouse                     0.7.1                    pypi_0    pypi
+numpy                     1.24.4                   pypi_0    pypi
+pyautogui                 0.9.54                   pypi_0    pypi
+python                    3.9.23               h716150d_0
+scipy                     1.13.1                   pypi_0    pypi
+serial                    0.0.97                   pypi_0    pypi
+sympy                     1.14.0                   pypi_0    pypi
+tk                        8.6.14               h5e9d12e_1  
+torch                     2.1.0+cu121              pypi_0    pypi
+torchaudio                2.1.0+cu121              pypi_0    pypi
+torchvision               0.16.0+cu121             pypi_0    pypi
+

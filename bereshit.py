@@ -649,6 +649,43 @@ class Joint:
         self.look_position = look_position
         self.look_rotation = look_rotation
 
+class FixJoint:
+    def __init__(self, other_object):
+        """
+        other_object: the Object you want to fix to.
+        """
+        self.other_object = other_object
+        self.bodyA = None  # Will be filled in at attach time
+        self.bodyB = other_object.get_component("rigidbody")
+
+        # Compute initial offset
+        self.local_offset = None
+
+    def attach(self, owner_object):
+        """
+        Called when this component is attached to an object.
+        """
+        self.bodyA = owner_object.get_component("rigidbody")
+        if self.bodyA is None or self.bodyB is None:
+            raise ValueError("FixJoint requires both objects to have rigidbodies")
+        self.local_offset = self.bodyB.position - self.bodyA.position
+
+    def solve(self, dt):
+        """
+        Enforce the fixed relative position constraint.
+        """
+        target_position = self.bodyA.position + self.local_offset
+        correction = target_position - self.bodyB.position
+
+        # Split correction evenly
+        self.bodyA.position -= 0.5 * correction
+        self.bodyB.position += 0.5 * correction
+
+        # Optionally correct velocity
+        rel_velocity = self.bodyB.velocity - self.bodyA.velocity
+        self.bodyA.velocity += 0.5 * rel_velocity
+        self.bodyB.velocity -= 0.5 * rel_velocity
+
 
 # class AgentController:
 #     def __init__(self, obj, goal, obs_dim=6, action_dim=4):
@@ -831,13 +868,17 @@ class Object:
             # boxcollider.is_trigger = False
             component = boxcollider
         elif name == "joint":
-            if isinstance(component, tuple):
-                joint = Joint(*component)
-            elif isinstance(component, Joint):
-                joint = component
-            else:
-                raise TypeError("Invalid type for Joint")
-            # joint.other.rigidbody.force = self.rigidbody.force
+            # Automatically attach joint to this object
+            if hasattr(component, "attach"):
+                component.attach(self)
+        # elif name == "joint":
+        #     if isinstance(component, tuple):
+        #         joint = Joint(*component)
+        #     elif isinstance(component, Joint):
+        #         joint = component
+        #     else:
+        #         raise TypeError("Invalid type for Joint")
+        #     # joint.other.rigidbody.force = self.rigidbody.force
         elif name == "agent":
             if isinstance(component, tuple):
                 agent = PPO.Agent(*component)
@@ -1054,9 +1095,9 @@ class Object:
             self.rigidbody.force += gravity * self.rigidbody.mass
 
             # If you want torque from gravity:
-            r = self.position - self.rigidbody.center_of_mass
-            gravity_torque = r.cross(gravity * self.rigidbody.mass)
-            self.rigidbody.torque += gravity_torque
+            # r = self.position - self.rigidbody.center_of_mass
+            # gravity_torque = r.cross(gravity * self.rigidbody.mass)
+            # self.rigidbody.torque += gravity_torque
     def Stage2(self,children):
         if self.parent == None:  # the world does not need an update
             for child in children:
@@ -1169,10 +1210,7 @@ class Object:
             else:
                 b[i] = -restitution * c["v_norm"]
 
-            # b[i] = -c["v_norm"] + beta * c["penetration"] / dt
-
         # STEP 4: Solve impulses
-        # impulses = np.linalg.solve(A, b)
         impulses = np.linalg.pinv(A) @ b
 
         impulses = np.maximum(impulses, 0.0)
@@ -1180,15 +1218,17 @@ class Object:
         # STEP 5: Apply impulses using helper functions
         for i, contact in enumerate(contacts):
             J = impulses[i]
+
             if contact["rb1"] and contact["rb2"]:
                 if not contact["rb1"].isKinematic and not contact["rb2"].isKinematic: # contact["rb1"].parent.name == "obj" and contact["rb2"].parent.name == "obj2"
                     self.resolve_dynamic_collision(contact, J)
                 elif not contact["rb1"].isKinematic or not contact["rb2"].isKinematic:
                     self.resolve_kinematic_collision(contact, J)
                 Jn = impulses[i]
+
                 # After applying normal impulse, recompute relative velocity
-                v1 = rb1.velocity if rb1 and not rb1.isKinematic else Vector3(0, 0, 0)
-                v2 = rb2.velocity if rb2 and not rb2.isKinematic else Vector3(0, 0, 0)
+                v1 = contact["rb1"].velocity if contact["rb1"] and not contact["rb1"].isKinematic else Vector3(0, 0, 0)
+                v2 = contact["rb2"].velocity if contact["rb2"] and not contact["rb2"].isKinematic else Vector3(0, 0, 0)
                 v_rel = v1 - v2
 
                 # Tangential component
@@ -1198,22 +1238,22 @@ class Object:
                 if tangent_length > 1e-6:
                     tangent = tangent.normalized()
                     # Friction coefficient: choose or get from materials
-                    if rb1 and rb2:
-                        mu = rb1._get_friction(rb2)
-                    elif rb1:
-                        mu = rb1.friction_coefficient
-                    elif rb2:
-                        mu = rb2.friction_coefficient
+                    if contact["rb1"] and contact["rb2"]:
+                        mu = contact["rb1"]._get_friction(contact["rb2"])
+                    elif contact["rb1"]:
+                        mu = contact["rb1"].friction_coefficient
+                    elif contact["rb2"]:
+                        mu = contact["rb2"].friction_coefficient
                     else:
                         mu = Rigidbody._default_friction
 
                     # Compute friction impulse magnitude
                     Jt_magnitude = -v_rel.dot(tangent)
                     denom = 0.0
-                    if rb1 and not rb1.isKinematic:
-                        denom += 1.0 / rb1.mass
-                    if rb2 and not rb2.isKinematic:
-                        denom += 1.0 / rb2.mass
+                    if contact["rb1"] and not contact["rb1"].isKinematic:
+                        denom += 1.0 / contact["rb1"].mass
+                    if contact["rb2"] and not contact["rb2"].isKinematic:
+                        denom += 1.0 / contact["rb2"].mass
 
                     if denom > 0.0:
                         Jt_magnitude /= denom
@@ -1226,10 +1266,10 @@ class Object:
                         Jt = tangent * Jt_magnitude
 
                         # Apply friction impulse
-                        if rb1 and not rb1.isKinematic:
-                            rb1.velocity += Jt / rb1.mass
-                        if rb2 and not rb2.isKinematic:
-                            rb2.velocity -= Jt / rb2.mass
+                        if contact["rb1"] and not contact["rb1"].isKinematic:
+                            contact["rb1"].velocity += Jt / contact["rb1"].mass
+                        if contact["rb2"] and not contact["rb2"].isKinematic:
+                            contact["rb2"].velocity -= Jt / contact["rb2"].mass
     def resolve_dynamic_collision(self, contact, J):
         """
         Applies impulse to both dynamic bodies, factoring restitution.
@@ -1374,6 +1414,15 @@ class Object:
             self.apply_friction(rb.normal_forces, dt)
         rb.normal_forces = Vector3()
 
+    def solve_joints(self, children, dt):
+        """
+        Go through all objects, find joints, and solve their constraints.
+        """
+        for child in children:
+            joint = child.get_component("joint")
+            if joint is not None:
+                joint.solve(dt)
+
     def update(self, dt,chack =True):
         children = self.get_all_children_bereshit()
         if chack :
@@ -1383,13 +1432,17 @@ class Object:
                             component.main()
         children =self.get_all_children_physics()
         self.Stage1(children) # APPLY GRAVITY and external forces
-        # self.Stage2(children) # handel joints
-        self.Stage3(children,dt) # handel collins and normal forces
-        # self.Stage4(children) # handel friction
+        self.Stage3(children,dt) # handel collisions and friction
+        self.solve_joints(children, dt)
+
         for child in children:
             rb = child.get_component("rigidbody")
             if rb is not None:
                 child.integrat(dt)
+
+        # self.Stage2(children) # handel joints
+        # self.Stage4(children) # handel friction
+
 
     # def resolve_kinematic_collision(self, child, normal, contact_point, normal_force):
     #     self.rigidbody.force += normal_force
@@ -1538,8 +1591,12 @@ class Object:
         self.position += self.rigidbody.velocity * dt \
                          + 0.5 * self.rigidbody.acceleration * dt * dt
         self.rigidbody.force = Vector3(0, 0, 0)
-        # self.rigidbody.torque = Vector3(0, 0, 0)
+        self.rigidbody.torque = Vector3(0, 0, 0)
         # self.add_rotation(ang_disp)
+        children = self.get_all_children_bereshit()
+        for child in children:
+            child.position += self.rigidbody.velocity * dt \
+                         + 0.5 * self.rigidbody.acceleration * dt * dt
 
         # if self.get_component("joint") != None:
         #     if self.joint.look_position:

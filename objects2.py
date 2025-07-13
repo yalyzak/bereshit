@@ -951,6 +951,7 @@ class Object:
         # 4.3) Integrate rotation
         ang_disp = self.rigidbody.angular_velocity * dt \
                    + 0.5 * self.rigidbody.angular_acceleration * dt * dt
+
         if self.get_component("joint") != None:
             if not self.joint.look_position:
                 # 4.4) Integrate position
@@ -964,7 +965,7 @@ class Object:
             # 4.4) Integrate position
             self.position += self.rigidbody.velocity * dt \
                              + 0.5 * self.rigidbody.acceleration * dt * dt
-
+            for
             # self.set_position(self.position)
 
             self.add_rotation(ang_disp)

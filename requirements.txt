@@ -1,0 +1,14 @@
+keyboard==0.13.5
+mouse==0.7.1
+numpy==1.24.4
+pyautogui==0.9.54
+scipy==1.13.1
+serial==0.0.97
+sympy==1.14.0
+torch==2.1.0+cu121
+torchaudio==2.1.0+cu121
+torchvision==0.16.0+cu121
+
+
+//pip install torch==2.1.0+cu121 torchaudio==2.1.0+cu121 torchvision==0.16.0+cu121 \
+    --extra-index-url https://download.pytorch.org/whl/cu121

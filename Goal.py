@@ -3,7 +3,7 @@ class Goal:
 
     def OnTriggerEnter(self, other):
 
-        if other.parent.name == "car":
+        if other.parent.name == "body":
             print("🎉 You reached the goal!")
 
             other.parent.reset_to_default()

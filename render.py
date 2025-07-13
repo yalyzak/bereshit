@@ -1,21 +1,31 @@
 import tkinter as tk
+
+import mouse
+
 from bereshit import Vector3
 from bereshit import rotate_vector_old
 import tkinter as tk
+import pyautogui
+screen_width, screen_height =0,0
 
 def run_renderer(root_object):
+    global screen_width, screen_height
     camera_obj = root_object.search_by_component("camera")
     if not camera_obj:
         print("No camera found.")
         return
 
     cam = camera_obj.camera
+    screen_width, screen_height = pyautogui.size()
+    center_x = screen_width // 2
+    center_y = screen_height // 2
+    mouse.move(center_x, center_y)
     WIDTH, HEIGHT = cam.width, cam.hight
     FOV = cam.FOV
     VIEWER_DISTANCE = cam.VIEWER_DISTANCE
 
     window = tk.Tk()
-    canvas = tk.Canvas(window, width=WIDTH, height=HEIGHT, bg="black")
+    canvas = tk.Canvas(window, width=screen_width, height=screen_height, bg="black")
     canvas.pack()
 
     def project(world_point):

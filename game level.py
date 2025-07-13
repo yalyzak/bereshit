@@ -67,17 +67,38 @@ for i in range(num_obstacles):
     obstacle.position = Vector3(x, 0.05, z)
     obstacles.append(obstacle)
 
-# --- Player Car ---
-player = bereshit.Object(
-    position=Vector3(0, 0.2, -floor_length / 2 + 1.0),
-    size=(0.4, 0.2, 0.6),
-    name="car"
+# --- Camera ---
+camera = bereshit.Object(
+    position=Vector3(0, 2.0, -floor_length / 2 + 2.0),
+    name="camera"
 )
-player.add_component("collider", bereshit.BoxCollider())
+camera.add_component("camera", bereshit.camera())
+player = bereshit.Object(
+    position=Vector3(0, 0.5, -floor_length / 2 + 3.0),
+    size=(0.4, 0.2, 0.6),
+    name="car",
+    children=[camera]
+)
+player.add_component("rigidbody", bereshit.Rigidbody(mass=1, useGravity=True, isKinematic=False))
+
+player_body = bereshit.Object(
+    position=Vector3(0, 0.3, -floor_length / 2 + 3.0),
+    size=(0.4, 0.2, 0.6),
+    name="body",
+    children=[]
+)
+
+player_body.add_component("collider", bereshit.BoxCollider())
+player_body.add_component("rigidbody", bereshit.Rigidbody(mass=1, useGravity=True, isKinematic=False))
+player_body.add_component("playerController", playerController.PlayerController())
+# player_body.add_component("joint",bereshit.FixJoint(player))
+
+# --- Player Car ---
+
+# player.add_component("collider", bereshit.BoxCollider())
 player.material.kind = "Car"
 player.material.color = "blue"
-player.add_component("rigidbody", bereshit.Rigidbody(mass=1, useGravity=True, isKinematic=False))
-player.add_component("playerController", playerController.PlayerController())
+# player.add_component("rigidbody", bereshit.Rigidbody(mass=1, useGravity=True, isKinematic=False))
 
 # --- Finish Line ---
 goal = bereshit.Object(
@@ -91,19 +112,13 @@ goal.add_component("collider", bereshit.BoxCollider(is_trigger=True))
 goal.add_component("Goal", Goal.Goal())
 goal.add_component("rigidbody", bereshit.Rigidbody(mass=0.001, useGravity=False, isKinematic=True))
 
-# --- Camera ---
-camera = bereshit.Object(
-    position=Vector3(0, 2.0, -floor_length / 2 + 3.0),
-    name="camera"
-)
-camera.add_component("camera", bereshit.camera())
-camera.add_component("camController", CamController.CamController(player))
+# camera.add_component("camController", CamController.CamController(player))
 
 # --- Scene ---
 scene = bereshit.Object(
     position=Vector3(0, 0, 0),
     size=(0, 0, 0),
-    children=[floor, *walls, *obstacles, player, goal],
+    children=[floor, *walls, *obstacles, player_body, player, goal],
     name="scene"
 )
 

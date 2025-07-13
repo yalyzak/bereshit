@@ -7,6 +7,7 @@ import CamController
 import moveToGoal
 import bereshit
 import asyncio
+from bereshit import Vector3
 import copy
 import PPO
 import threading
@@ -20,7 +21,7 @@ obj2 = bereshit.Object(
     size=(0.1, 0.1, 0.1),
     name="obj2"
 )
-obj2.add_component("rigidbody", bereshit.Rigidbody(mass=1, useGravity=True, isKinematic=False,material='Steel'))
+obj2.add_component("rigidbody", bereshit.Rigidbody(mass=1, useGravity=True, isKinematic=False))
 obj2.add_component("collider", bereshit.BoxCollider())
 
 obj = bereshit.Object(
@@ -28,7 +29,7 @@ obj = bereshit.Object(
     size=(0.1, 0.1, 0.1),
     name="obj"
 )
-obj.add_component("rigidbody", bereshit.Rigidbody(mass=1, useGravity=True, isKinematic=False,material='Steel'))
+obj.add_component("rigidbody", bereshit.Rigidbody(mass=1, useGravity=True, isKinematic=False))
 obj.add_component("collider", bereshit.BoxCollider())
 # obj2.add_component("joint", bereshit.Joint(obj))
 
@@ -75,7 +76,7 @@ floor = bereshit.Object(
     children=[]
 )
 floor.add_component("collider", bereshit.BoxCollider())
-floor.add_component("rigidbody", bereshit.Rigidbody(mass=999, isKinematic=True,useGravity=False,material='floor'))
+floor.add_component("rigidbody", bereshit.Rigidbody(mass=999, isKinematic=True,useGravity=False))
 
 wall_rigidbody = bereshit.Rigidbody(mass=1, isKinematic=True)
 wall.add_component("rigidbody", wall_rigidbody)
@@ -111,8 +112,10 @@ FPS= 1
 async def main_logic():
     start_wall_time = time.time()
     steps = 0
-    speed = 1 # real time slip
+    speed = .1 # real time slip
     bereshit.dt = 1/((1/dt)/60) * speed
+    scene.add_rotation(Vector3(0,0,45),forall=True)
+    obj.add_rotation(Vector3(0,0,-45))
 
     while True:
         steps += 1
