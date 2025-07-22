@@ -25,9 +25,10 @@ class moveToGoal:
         self.parent.movetogoal.goal.local_position = bereshit.Vector3(random.uniform(-5, 5), 0.5,
                                                                        random.uniform(-5, 5))
     def apply_continuous_action(self, action):
+        speed = 10
         # action is a numpy array like [fx, fy, fz]
-        force = bereshit.Vector3(action[0], 0, action[1]) * 100 * (bereshit.dt * 100)
-        self.parent.rigidbody.exert_force(force)
+        velocity = bereshit.Vector3(action[0], 0, action[1]) * speed * bereshit.dt
+        self.parent.rigidbody.velocity += velocity
     def main(self):
         global episode, UPDATE_INTERVAL
         episode += 1

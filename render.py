@@ -1,95 +1,170 @@
-import tkinter as tk
+import moderngl
+import moderngl_window
+from moderngl_window import geometry
+from pyrr import Vector4, Vector3 as PyrrVector3, Quaternion as PyrrQuat, Matrix44
+import numpy as np
+from bereshit import Vector3, rotate_vector_old
 
-import mouse
 
-from bereshit import Vector3
-from bereshit import rotate_vector_old
-import tkinter as tk
-import pyautogui
-screen_width, screen_height =0,0
+
+class BereshitRenderer(moderngl_window.WindowConfig):
+    gl_version = (3, 3)
+    title = "Bereshit moderngl Renderer"
+    window_size = (1920, 1080)
+    aspect_ratio = None
+    resizable = True
+    resource_dir = '.'
+    root_object = None  # 👈 class variable to inject data
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.root_object = BereshitRenderer.root_object  # 👈 assign it here
+        self.camera_obj = self.root_object.search_by_component("camera")
+        if not self.camera_obj:
+            raise Exception("No camera object found")
+
+        cam = self.camera_obj.camera
+        self.fov = cam.FOV
+        self.viewer_distance = cam.VIEWER_DISTANCE
+
+        self.prog = self.ctx.program(
+            vertex_shader='''
+            #version 330
+            uniform mat4 model;
+            uniform mat4 view;
+            uniform mat4 projection;
+            in vec3 in_position;
+            void main() {
+                gl_Position = projection * view * model * vec4(in_position, 1.0);
+            }
+            ''',
+            fragment_shader='''
+            #version 330
+            out vec4 f_color;
+            uniform vec3 color;
+            void main() {
+                f_color = vec4(color, 1.0);
+            }
+            '''
+        )
+
+        self.view = Matrix44.identity()
+        self.projection = Matrix44.perspective_projection(self.fov, self.wnd.aspect_ratio, 0.1, 1000.0)
+
+        self.meshes = []
+        self.prepare_meshes()
+
+    def prepare_meshes(self):
+        shading = self.camera_obj.camera.shading
+        if shading == "wire":
+            for obj in [self.root_object] + self.root_object.get_all_children_bereshit():
+                if obj.mesh is None:
+                    continue
+
+                # Convert vertices to numpy
+                verts = [(v * obj.size * 0.5).to_np() for v in
+                         obj.mesh.vertices]  # Ensure this returns list or np.array of floats
+
+                lines = []
+                for i, j in obj.mesh.edges:
+                    lines.extend(verts[i])  # 👈 flatten the vector into x, y, z
+                    lines.extend(verts[j])
+
+                vbo = np.array(lines, dtype='f4')
+                vao = self.ctx.buffer(vbo.tobytes())
+                self.meshes.append({
+                    'obj': obj,
+                    'vbo': vao,
+                    'vao': self.ctx.vertex_array(
+                        self.prog,
+                        [(vao, '3f', 'in_position')],
+                    ),
+                    'len': len(lines),
+                })
+        if shading == "solid":
+            for obj in [self.root_object] + self.root_object.get_all_children_bereshit():
+                if obj.mesh is None:
+                    continue
+
+                # Convert vertices to numpy (scaled and centered)
+                verts = [(v * obj.size * 0.5).to_np() for v in obj.mesh.vertices]
+
+                # Build triangle vertex list
+                triangles = []
+                for tri in obj.mesh.triangles:  # tri = (i, j, k)
+                    for index in tri:
+                        triangles.extend(verts[index])  # flatten x, y, z into list
+
+                vbo = np.array(triangles, dtype='f4')
+                vao_buffer = self.ctx.buffer(vbo.tobytes())
+
+                self.meshes.append({
+                    'obj': obj,
+                    'vbo': vao_buffer,
+                    'vao': self.ctx.vertex_array(
+                        self.prog,
+                        [(vao_buffer, '3f', 'in_position')],
+                    ),
+                    'len': len(triangles),
+                })
+    def on_render(self, time: float, frametime: float):
+        shading = self.camera_obj.camera.shading
+
+        self.ctx.clear(0.0, 0.0, 0.0)
+
+        cam_pos = self.camera_obj.position.to_np()
+        cam_rot = self.camera_obj.quaternion
+        # Rotate forward vector (0, 0, 1) using the rotation matrix
+        pyrr_q = PyrrQuat([cam_rot.x, cam_rot.y, cam_rot.z, cam_rot.w])
+        rot_matrix = Matrix44.from_quaternion(pyrr_q)
+
+        forward_vec4 = np.array([0.0, 0.0, 1.0, 0.0])  # direction vector (w=0)
+        rotated_forward = rot_matrix @ forward_vec4
+        forward = rotated_forward[:3]
+
+        target = cam_pos + forward
+
+        up_vec4 = np.array([0.0, 1.0, 0.0, 0.0])
+        rotated_up = rot_matrix @ up_vec4
+        up = rotated_up[:3]
+
+        self.view = Matrix44.look_at(
+            PyrrVector3(cam_pos.tolist()),
+            PyrrVector3(target.tolist()),
+            PyrrVector3(up.tolist())  # or [0,1,0] if not rotated
+        )
+
+        for item in self.meshes:
+            obj = item['obj']
+            pos = obj.position.to_np()
+            size = obj.size.to_np()
+            rot = obj.quaternion  # your custom Quaternion
+
+
+            verts = [v.to_np() for v in obj.mesh.vertices]
+            centroid = np.mean(verts, axis=0)
+            verts = [(v.to_np() - centroid) * size * 0.5 for v in obj.mesh.vertices]
+            model = Matrix44.from_translation(pos) @ rot_matrix @ Matrix44.from_scale((1.0, 1.0, 1.0))
+
+            # Convert custom quaternion to pyrr-compatible
+            # pyrr_q = PyrrQuat([rot.x, rot.y, rot.z, rot.w])
+            # rot_matrix = Matrix44.from_quaternion(pyrr_q)
+            #
+            # model = Matrix44.from_translation(pos) @ rot_matrix @ Matrix44.from_scale(size * 0.5)
+
+            self.prog['model'].write(model.astype('f4').tobytes())
+            self.prog['view'].write(self.view.astype('f4').tobytes())
+            self.prog['projection'].write(self.projection.astype('f4').tobytes())
+
+            color = obj.material.color if hasattr(obj.material, 'color') else (1.0, 1.0, 1.0)
+            self.prog['color'].value = color
+            if shading == "wire":
+                item['vao'].render(mode=moderngl.LINES, vertices=item['len'])
+            elif shading == "solid":
+                item['vao'].render(mode=moderngl.TRIANGLES, vertices=item['len'] // 3)
+
 
 def run_renderer(root_object):
-    global screen_width, screen_height
-    camera_obj = root_object.search_by_component("camera")
-    if not camera_obj:
-        print("No camera found.")
-        return
-
-    cam = camera_obj.camera
-    screen_width, screen_height = pyautogui.size()
-    center_x = screen_width // 2
-    center_y = screen_height // 2
-    mouse.move(center_x, center_y)
-    WIDTH, HEIGHT = cam.width, cam.hight
-    FOV = cam.FOV
-    VIEWER_DISTANCE = cam.VIEWER_DISTANCE
-
-    window = tk.Tk()
-    canvas = tk.Canvas(window, width=screen_width, height=screen_height, bg="black")
-    canvas.pack()
-
-    def project(world_point):
-        # Camera transform
-        relative = world_point - camera_obj.position
-        rotated = rotate_vector_old(relative, Vector3(0,0,0), camera_obj.rotation)
-
-
-        if (VIEWER_DISTANCE + rotated.z) == 0:
-            factor = 0
-        else:
-            factor = FOV / (VIEWER_DISTANCE + rotated.z)
-        x = rotated.x * factor + WIDTH / 2
-        y = -rotated.y * factor + HEIGHT / 2
-        return x, y
-
-    def draw_scene():
-        canvas.delete("all")
-
-        for obj in [root_object] + root_object.get_all_children_bereshit():
-            # Compute position relative to camera
-            center_relative = obj.position - camera_obj.position
-            center_rotated = rotate_vector_old(center_relative, Vector3(0, 0, 0), camera_obj.rotation)
-
-            if center_rotated.z <= 0:
-                # Behind camera—skip
-                continue
-
-            # Compute corners
-            size = obj.size * 0.5
-            corners = [
-                Vector3(x, y, z)
-                for x in (-size.x, size.x)
-                for y in (-size.y, size.y)
-                for z in (-size.z, size.z)
-            ]
-            world_corners = [rotate_vector_old(c, Vector3(0, 0, 0), obj.rotation) + obj.position for c in corners]
-
-            # Project all corners
-            projected = []
-            for c in world_corners:
-                rel = c - camera_obj.position
-                rot = rotate_vector_old(rel, Vector3(0, 0, 0), camera_obj.rotation)
-                if rot.z <= 0:
-                    # For edges crossing behind camera, just clamp to avoid crash.
-                    # You can improve this with proper near-plane clipping.
-                    rot.z = 0.001
-                factor = FOV / (VIEWER_DISTANCE + rot.z)
-                x = rot.x * factor + WIDTH / 2
-                y = -rot.y * factor + HEIGHT / 2
-                projected.append((x, y))
-
-            edges = [
-                (0, 1), (1, 3), (3, 2), (2, 0),
-                (4, 5), (5, 7), (7, 6), (6, 4),
-                (0, 4), (1, 5), (2, 6), (3, 7)
-            ]
-            for i, j in edges:
-                x1, y1 = projected[i]
-                x2, y2 = projected[j]
-                canvas.create_line(x1, y1, x2, y2, fill=obj.material.color)
-
-        canvas.after(33, draw_scene)
-
-    draw_scene()
-    window.mainloop()
+    BereshitRenderer.root_object = root_object  # 👈 inject your object here
+    moderngl_window.run_window_config(BereshitRenderer, args=['--window', 'glfw'])
 

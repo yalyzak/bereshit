@@ -8,28 +8,31 @@ import mouse
 class PlayerController:
     def __init__(self):
         self.force_amount = .03
+        self.max_speed = 2
         # self.cam = cam
 
         self.force_amount2 = 4
     def OnCollisionStay(self, other):
-        if keyboard.is_pressed('w'):
-            # self.parent.rigidbody.exert_force(Vector3(0, 0, self.force_amount))
-            self.parent.rigidbody.velocity += Vector3(0, 0, self.force_amount)
+        if self.parent.rigidbody.velocity.magnitude() < self.max_speed:
 
-        if keyboard.is_pressed('s'):
-            self.parent.rigidbody.velocity += Vector3(0, 0, -self.force_amount)
+            if keyboard.is_pressed('w'):
+                # self.parent.rigidbody.exert_force(Vector3(0, 0, self.force_amount))
+                self.parent.rigidbody.velocity += Vector3(0, 0, self.force_amount)
 
-            # self.parent.rigidbody.exert_force(Vector3(0, 0, -self.force_amount))
+            if keyboard.is_pressed('s'):
+                self.parent.rigidbody.velocity += Vector3(0, 0, -self.force_amount)
 
-        if keyboard.is_pressed('d'):
-            self.parent.rigidbody.velocity += Vector3(self.force_amount, 0, 0)
+                # self.parent.rigidbody.exert_force(Vector3(0, 0, -self.force_amount))
 
-            # self.parent.rigidbody.exert_force(Vector3(self.force_amount, 0, 0))
+            if keyboard.is_pressed('d'):
+                self.parent.rigidbody.velocity += Vector3(self.force_amount, 0, 0)
 
-        if keyboard.is_pressed('a'):
-            self.parent.rigidbody.velocity += Vector3(-self.force_amount, 0, 0)
+                # self.parent.rigidbody.exert_force(Vector3(self.force_amount, 0, 0))
 
-            # self.parent.rigidbody.exert_force(Vector3(-self.force_amount, 0, 0))
+            if keyboard.is_pressed('a'):
+                self.parent.rigidbody.velocity += Vector3(-self.force_amount, 0, 0)
+
+                # self.parent.rigidbody.exert_force(Vector3(-self.force_amount, 0, 0))
 
         if keyboard.is_pressed('space'):
             self.parent.rigidbody.velocity += Vector3(0, self.force_amount2, 0)
@@ -82,5 +85,5 @@ class PlayerController:
     # def start(self):
     #     self.force_amount = self.parent.rigidbody.mass * 2 * 9.8
 
-    def main(self):
+    def Update(self):
         self.keyboard_controller()

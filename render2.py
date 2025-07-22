@@ -1,213 +1,127 @@
-import time
+import moderngl
+import moderngl_window
+from moderngl_window import geometry
+from pyrr import Matrix44, Quaternion, Vector3 as PyrrVector3
+import numpy as np
+from bereshit import Vector3, rotate_vector_old
 
+class BereshitRenderer(moderngl_window.WindowConfig):
+    gl_version = (3, 3)
+    title = "Bereshit moderngl Renderer"
+    window_size = (1280, 720)
+    aspect_ratio = None
+    resizable = True
+    resource_dir = '.'
+    root_object = None  # 👈 class variable to inject data
 
-def run_renderer(root_object):
-    import tkinter as tk
-    import math
-    import bereshit2  # Your custom object library
-    from bereshit2 import Vector3
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.root_object = BereshitRenderer.root_object  # 👈 assign it here
+        self.camera_obj = self.root_object.search_by_component("camera")
+        if not self.camera_obj:
+            raise Exception("No camera object found")
 
-    # === Constants ===
-    WIDTH, HEIGHT = 1920 , 1080
-    FOV = 120
-    VIEWER_DISTANCE = 5
+        cam = self.camera_obj.camera
+        self.fov = cam.FOV
+        self.viewer_distance = cam.VIEWER_DISTANCE
 
-    CUBE_VERTICES = [
-        (-0.5, -0.5, -0.5), (0.5, -0.5, -0.5),
-        (0.5,  0.5, -0.5), (-0.5, 0.5, -0.5),
-        (-0.5, -0.5,  0.5), (0.5, -0.5,  0.5),
-        (0.5,  0.5,  0.5), (-0.5, 0.5,  0.5),
-    ]
-
-    CUBE_EDGES = [
-        (0,1), (1,2), (2,3), (3,0),
-        (4,5), (5,6), (6,7), (7,4),
-        (0,4), (1,5), (2,6), (3,7),
-    ]
-
-    # === Camera Object ===
-    camera = bereshit2.Object(
-        position=(0, 10, -20),
-        rotation=(0, 0, 0),
-        size=(0, 0, 0),
-        children=[]
-    )
-
-    camera_root = bereshit2.Object(
-        position=(0, 10, -20),
-        rotation=(0, 0, 0),
-        size=(0, 0, 0),
-        children=[camera]
-    )
-
-    camera_root.set_local_rotation()
-
-    # === Math Utilities ===
-    def rotate_point(v, rotation):
-        x, y, z = v
-        rx, ry, rz = map(math.radians, rotation)
-
-        cos_x, sin_x = math.cos(rx), math.sin(rx)
-        y, z = y * cos_x - z * sin_x, y * sin_x + z * cos_x
-
-        cos_y, sin_y = math.cos(ry), math.sin(ry)
-        x, z = x * cos_y + z * sin_y, -x * sin_y + z * cos_y
-
-        cos_z, sin_z = math.cos(rz), math.sin(rz)
-        x, y = x * cos_z - y * sin_z, x * sin_z + y * cos_z
-
-        return Vector3(x, y, z)
-
-    def project(world_point, camera_obj, camera_root_obj):
-        cam_world_pos = camera_root_obj.local_position + rotate_point(camera_obj.local_position, camera_root_obj.rotation)
-        cam_world_rot = Vector3(
-            camera_root_obj.rotation.x + camera_obj.rotation.x,
-            camera_root_obj.rotation.y + camera_obj.rotation.y,
-            camera_root_obj.rotation.z + camera_obj.rotation.z
+        self.prog = self.ctx.program(
+            vertex_shader='''
+            #version 330
+            uniform mat4 model;
+            uniform mat4 view;
+            uniform mat4 projection;
+            in vec3 in_position;
+            void main() {
+                gl_Position = projection * view * model * vec4(in_position, 1.0);
+            }
+            ''',
+            fragment_shader='''
+            #version 330
+            out vec4 f_color;
+            uniform vec3 color;
+            void main() {
+                f_color = vec4(color, 1.0);
+            }
+            '''
         )
 
-        relative = world_point - cam_world_pos
-        rx, ry, rz = map(math.radians, (-cam_world_rot.x, -cam_world_rot.y, -cam_world_rot.z))
-        x, y, z = relative
+        self.view = Matrix44.identity()
+        self.projection = Matrix44.perspective_projection(self.fov, self.wnd.aspect_ratio, 0.1, 1000.0)
 
-        # Rotate around Y
-        cos_y, sin_y = math.cos(ry), math.sin(ry)
-        x, z = x * cos_y + z * sin_y, -x * sin_y + z * cos_y
+        self.meshes = []
+        self.prepare_meshes()
 
-        # Rotate around X
-        cos_x, sin_x = math.cos(rx), math.sin(rx)
-        y, z = y * cos_x - z * sin_x, -y * sin_x + z * cos_x
+    def prepare_meshes(self):
+        for obj in [self.root_object] + self.root_object.get_all_children_bereshit():
+            if obj.mesh is None:
+                continue
 
-        # Rotate around Z
-        cos_z, sin_z = math.cos(rz), math.sin(rz)
-        x, y = x * cos_z + y * sin_z, -x * sin_z + y * cos_z
+            # Convert vertices to numpy
+            verts = [(v * obj.size * 0.5).to_np() for v in
+                     obj.mesh.vertices]  # Ensure this returns list or np.array of floats
 
-        # ⛔️ Skip projection if behind camera
-        if z <= 0:
-            return None  # Not visible
+            lines = []
+            for i, j in obj.mesh.edges:
+                lines.extend(verts[i])  # 👈 flatten the vector into x, y, z
+                lines.extend(verts[j])
 
+            vbo = np.array(lines, dtype='f4')
+            vao = self.ctx.buffer(vbo.tobytes())
+            self.meshes.append({
+                'obj': obj,
+                'vbo': vao,
+                'vao': self.ctx.vertex_array(
+                    self.prog,
+                    [(vao, '3f', 'in_position')],
+                ),
+                'len': len(lines),
+            })
 
-        factor = FOV / (z + VIEWER_DISTANCE)
-        x_proj = int(x * factor + WIDTH / 2)
-        y_proj = int(-y * factor + HEIGHT / 2)
-        return x_proj, y_proj
+    def on_render(self, time: float, frametime: float):
+        self.ctx.clear(0.0, 0.0, 0.0)
 
-    def render_object(canvas, obj, global_pos, global_rot, global_scale):
-        vertices = []
-        for corner in CUBE_VERTICES:
-            local = Vector3(*corner)
-            scaled = local * global_scale
-            rotated = rotate_point(scaled, global_rot)
-            world = global_pos + rotated
-            screen = project(world, camera, camera_root)
-            vertices.append(screen)
+        # --- Camera ---
+        cam_pos = self.camera_obj.position.to_np()
+        cam_rot = self.camera_obj.quaternion  # Assume this is your Quaternion class
 
-        for i, j in CUBE_EDGES:
-            if vertices[i] is not None and vertices[j] is not None:
-                 canvas.create_line(*vertices[i], *vertices[j], fill="black")
+        # Convert to pyrr.Quaternion: pyrr expects [w, x, y, z]
+        q_cam = Quaternion([cam_rot.w, cam_rot.x, cam_rot.y, cam_rot.z])
+        forward = q_cam * PyrrVector3([0, 0, 1])  # Rotate forward vector using quaternion
+        target = cam_pos + forward
 
-    def render_hierarchy(canvas, servo, parent_pos, parent_rot):
-        if isinstance(servo, bereshit2.Servo):
-            obj = servo.obj
-        else:
-            obj = servo
-        local_pos = rotate_point(obj.local_position, parent_rot)
-        global_pos = parent_pos + local_pos
-        global_rot = tuple(p + r for p, r in zip(parent_rot, obj.local_rotation))
-        global_scale = obj.size
+        self.view = Matrix44.look_at(
+            PyrrVector3(cam_pos),
+            PyrrVector3(target),
+            PyrrVector3([0, 1, 0])
+        )
 
-        render_object(canvas, obj, global_pos, global_rot, global_scale)
+        # --- Render each mesh ---
+        for item in self.meshes:
+            obj = item['obj']
+            pos = obj.position.to_np()
+            rot = obj.quaternion  # Your Quaternion
+            size = obj.size.to_np()
 
-        for child in obj.children:
-            render_hierarchy(canvas, child, global_pos, global_rot)
+            trans = Matrix44.from_translation(pos)
+            scale = Matrix44.from_scale(size * 0.5)
 
-    # === Controls ===
-    pressed_keys = set()
+            # Convert your Quaternion to pyrr
+            q_obj = Quaternion([rot.w, rot.x, rot.y, rot.z])
+            quaternion = q_obj.matrix44
 
-    def key_down(event):
-        key = event.keysym.lower()
-        pressed_keys.add(key)
+            model = trans @ quaternion @ scale
 
-    def key_up(event):
-        key = event.keysym.lower()
-        pressed_keys.discard(key)
+            self.prog['model'].write(model.astype('f4').tobytes())
+            self.prog['view'].write(self.view.astype('f4').tobytes())
+            self.prog['projection'].write(self.projection.astype('f4').tobytes())
 
-    def update_camera():
-        # root_object.get_children_bereshit2()[0].gravity(collidable_bereshit2=[root_object.get_children_bereshit2()[1]])
-        # root_object.get_children_bereshit2()[1].gravity()
+            color = obj.material.color if hasattr(obj.material, 'color') else (1.0, 1.0, 1.0)
+            self.prog['color'].value = color
 
-        speed = 0.8
-        rot_speed = 2
-        root_pos = camera_root.local_position
-        cam_rot = camera.rotation
+            item['vao'].render(mode=moderngl.LINES, vertices=item['len'])
 
-        yaw = math.radians(cam_rot.y)
-        forward = Vector3(math.sin(yaw), 0, math.cos(yaw))
-        right = Vector3(math.cos(yaw), 0, -math.sin(yaw))
-        up = Vector3(0, 1, 0)
+def run_renderer(root_object):
+    BereshitRenderer.root_object = root_object  # 👈 inject your object here
+    moderngl_window.run_window_config(BereshitRenderer, args=['--window', 'glfw'])
 
-        # Move camera root
-        move_vec = Vector3(0, 0, 0)
-        if 'w' in pressed_keys: move_vec += forward
-        if 's' in pressed_keys: move_vec -= forward
-        if 'a' in pressed_keys: move_vec -= right
-        if 'd' in pressed_keys: move_vec += right
-        if 'space' in pressed_keys: move_vec += up
-        if 'shift_l' in pressed_keys: move_vec -= up
-        camera_root.set_position(root_pos + move_vec * speed)
-
-        # Rotate camera
-        if 'left' in pressed_keys: cam_rot.y -= rot_speed
-        if 'right' in pressed_keys: cam_rot.y += rot_speed
-        if 'up' in pressed_keys: cam_rot.x -= rot_speed
-        if 'down' in pressed_keys: cam_rot.x += rot_speed
-        camera.set_rotation(cam_rot)
-
-    # === Mouse Drag Rotation ===
-    is_rotating = False
-    last_mouse_pos = None
-
-    def mouse_down(event):
-        nonlocal is_rotating, last_mouse_pos
-        if event.num == 2:
-            is_rotating = True
-            last_mouse_pos = (event.x, event.y)
-
-    def mouse_up(event):
-        nonlocal is_rotating
-        if event.num == 2:
-            is_rotating = False
-
-    def mouse_motion(event):
-        nonlocal last_mouse_pos
-        if is_rotating and last_mouse_pos:
-            dx = event.x - last_mouse_pos[0]
-            dy = event.y - last_mouse_pos[1]
-            sensitivity = 0.3
-            rot = camera.rotation
-            new_rot = Vector3(rot.x + dy * sensitivity, rot.y + dx * sensitivity, rot.z)
-            camera.set_rotation(new_rot)
-            last_mouse_pos = (event.x, event.y)
-
-    # === GUI Setup ===
-    win = tk.Tk()
-    win.title("3D Object Renderer")
-    canvas = tk.Canvas(win, width=WIDTH, height=HEIGHT, bg="white")
-    canvas.pack()
-
-    canvas.focus_set()  # Ensures canvas gets keyboard focus
-
-    canvas.bind("<KeyPress>", key_down)
-    canvas.bind("<KeyRelease>", key_up)
-    canvas.bind("<ButtonPress-2>", mouse_down)
-    canvas.bind("<ButtonRelease-2>", mouse_up)
-    canvas.bind("<B2-Motion>", mouse_motion)
-
-    def render_loop():
-        canvas.delete("all")
-        update_camera()
-        render_hierarchy(canvas, root_object, Vector3(0, 0, 0), (0, 0, 0))
-        win.after(100, render_loop)
-
-    render_loop()
-    win.mainloop()

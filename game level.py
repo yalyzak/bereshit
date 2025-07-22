@@ -72,12 +72,12 @@ camera = bereshit.Object(
     position=Vector3(0, 2.0, -floor_length / 2 + 2.0),
     name="camera"
 )
-camera.add_component("camera", bereshit.camera())
+camera.add_component("camera", bereshit.Camera())
 player = bereshit.Object(
     position=Vector3(0, 0.5, -floor_length / 2 + 3.0),
     size=(0.4, 0.2, 0.6),
     name="car",
-    children=[camera]
+    children=[]
 )
 player.add_component("rigidbody", bereshit.Rigidbody(mass=1, useGravity=True, isKinematic=False))
 
@@ -85,7 +85,7 @@ player_body = bereshit.Object(
     position=Vector3(0, 0.3, -floor_length / 2 + 3.0),
     size=(0.4, 0.2, 0.6),
     name="body",
-    children=[]
+    children=[camera]
 )
 
 player_body.add_component("collider", bereshit.BoxCollider())

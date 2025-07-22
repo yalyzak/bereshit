@@ -11,6 +11,7 @@ import copy
 import PPO
 import threading
 import render
+import Core
 
 obj = bereshit.Object(position=(0, 0.5, 0), size=(1, 1, 1),name="obj")
 obj.add_component("rigidbody", (bereshit.Rigidbody(mass=1,useGravity=True,isKinematic=False,friction_coefficient=0.5)))
@@ -88,7 +89,8 @@ camera = bereshit.Object(
         position=(0, 10, -6),
         rotation=(0, 0, 0),
         size=(0, 0, 0),
-        children=[]
+        children=[],
+        name="camera"
     )
 camera_root = bereshit.Object(
         position=(0, 0, -6),
@@ -97,37 +99,37 @@ camera_root = bereshit.Object(
         children=[camera]
     )
 
-camera.add_component("camera", bereshit.camera())
+camera.add_component("camera", bereshit.Camera())
 camera.add_component('camController',CamController.CamController())
 scenes.append(camera)
 world = bereshit.Object(position=(0, 0, 0), size=(0, 0, 0), children=scenes,name="world")
 
-
-TARGET_FPS = 60 *2.5
-bereshit.dt = TARGET_FPS * 0.000165
-
-async def main_logic():
-    while True:
-        frame_start = time.perf_counter()
-
-        world.update(dt=bereshit.dt)
-        # Measure how long update took
-        elapsed = time.perf_counter() - frame_start
-        # Compute remaining time to sleep
-        sleep_time = max(0, bereshit.dt - elapsed)
-
-        await asyncio.sleep(sleep_time)
-
-def start_async_loop():
-    asyncio.run(main_logic())
-
-if __name__ == "__main__":
-    # Initialize world
-    world.reset_to_default()
-    # start_async_loop()
-    # Start async logic in a thread
-    logic_thread = threading.Thread(target=start_async_loop, daemon=True)
-    logic_thread.start()
-
-    # Start rendering in main thread
-    render.run_renderer(world)
+Core.run(world,speed= 10)
+# TARGET_FPS = 60 *2.5
+# bereshit.dt = TARGET_FPS * 0.000165
+#
+# async def main_logic():
+#     while True:
+#         frame_start = time.perf_counter()
+#
+#         world.update(dt=bereshit.dt)
+#         # Measure how long update took
+#         elapsed = time.perf_counter() - frame_start
+#         # Compute remaining time to sleep
+#         sleep_time = max(0, bereshit.dt - elapsed)
+#
+#         await asyncio.sleep(sleep_time)
+#
+# def start_async_loop():
+#     asyncio.run(main_logic())
+#
+# if __name__ == "__main__":
+#     # Initialize world
+#     world.reset_to_default()
+#     # start_async_loop()
+#     # Start async logic in a thread
+#     logic_thread = threading.Thread(target=start_async_loop, daemon=True)
+#     logic_thread.start()
+#
+#     # Start rendering in main thread
+#     render.run_renderer(world)

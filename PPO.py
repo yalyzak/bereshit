@@ -357,3 +357,6 @@ class Agent:
                 self.optimizer.step()
 
         self.memory.clear()
+
+    def attach(self, owner_object):
+        pass

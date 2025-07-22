@@ -7,9 +7,9 @@ import render
 
 
 
-def run(world):
+def run(world,speed=1):
     TARGET_FPS = 60
-    bereshit.dt = TARGET_FPS * 0.000165
+    # bereshit.dt = TARGET_FPS * 0.000165
 
     dt = 1 / 600
 
@@ -19,9 +19,9 @@ def run(world):
     async def main_logic():
         start_wall_time = time.time()
         steps = 0
-        speed = 1  # real time slip
-        bereshit.dt = 1 / ((1 / dt) / 60) * speed
-
+        # speed = 5  # real time slip
+        bereshit.dt = (10 / ((1 / dt) / 60) * speed)
+        world.Start()
         while True:
             steps += 1
             simulated_time = steps * dt

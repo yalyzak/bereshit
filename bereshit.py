@@ -1,26 +1,17 @@
-
 import math
-
 import time
+
+import moderngl
 import numpy as np
 from dataclasses import dataclass
 import statistics
 import copy
-
-
+import PPO
 import send
 from math import sqrt
-
+import trimesh
+import open3d as o3d
 dt = 1/60
-
-
-
-class camera:
-    def __init__(self,width = 1920, hight =1080, FOV = 120,VIEWER_DISTANCE = 0):
-        self.width = width
-        self.hight = hight
-        self.FOV = FOV
-        self.VIEWER_DISTANCE = VIEWER_DISTANCE
 
 @dataclass
 class Vector3:
@@ -82,6 +73,12 @@ class Vector3:
         raise TypeError("Unsupported type for multiplication")
     def __copy__(self):
         return Vector3(self.x,self.y,self.z)
+
+    def __eq__(self, other):
+        return isinstance(other, Vector3) and (self.x, self.y, self.z) == (other.x, other.y, other.z)
+
+    def __hash__(self):
+        return hash((self.x, self.y, self.z))
     def dis(self, other: 'Vector3') -> float:
         dx = self.x - other.x
         dy = self.y - other.y
@@ -106,6 +103,9 @@ class Vector3:
             self.z * other.x - self.x * other.z,
             self.x * other.y - self.y * other.x
         )
+
+    def to_np(self):
+        return np.array([self.x, self.y, self.z], dtype='f4')
 
     def magnitude(self):
         return (self.x ** 2 + self.y ** 2 + self.z ** 2) ** 0.5
@@ -136,117 +136,391 @@ class Vector3:
         yield self.x
         yield self.y
         yield self.z
-class Vector4:
-    def __init__(self, x=0, y=0, z=0, w=0):
+class Quaternion:
+    def __init__(self, x=0, y=0, z=0, w=1):
         self.x = x
         self.y = y
         self.z = z
         self.w = w
 
-    def __iadd__(self, other):
-        if isinstance(other, Vector4):
-            self.x += other.x
-            self.y += other.y
-            self.z += other.z
-            self.w += other.w
-            return self
-        elif isinstance(other, (list, tuple)) and len(other) == 4:
-            self.x += other[0]
-            self.y += other[1]
-            self.z += other[2]
-            self.w += other[3]
-            return self
-        raise TypeError(f"Unsupported type for +=: {type(other)}")
+    def __repr__(self):
+        return f"Quaternion({self.x}, {self.y}, {self.z}, {self.w})"
 
     def __copy__(self):
-        return Vector4(self.x, self.y, self.z, self.w)
+        return Quaternion(self.x, self.y, self.z, self.w)
 
     def __neg__(self):
-        return Vector4(-self.x, -self.y, -self.z, -self.w)
+        return Quaternion(-self.x, -self.y, -self.z, -self.w)
 
     def __add__(self, other):
-        if isinstance(other, Vector4):
-            return Vector4(
-                self.x + other.x,
-                self.y + other.y,
-                self.z + other.z,
-                self.w + other.w
-            )
+        if isinstance(other, Quaternion):
+            return Quaternion(self.x + other.x, self.y + other.y, self.z + other.z, self.w + other.w)
         elif isinstance(other, (list, tuple)) and len(other) == 4:
-            return Vector4(
-                self.x + other[0],
-                self.y + other[1],
-                self.z + other[2],
-                self.w + other[3]
-            )
+            return Quaternion(self.x + other[0], self.y + other[1], self.z + other[2], self.w + other[3])
         raise TypeError(f"Unsupported type for addition: {type(other)}")
 
+    def __iadd__(self, other):
+        result = self + other
+        self.x, self.y, self.z, self.w = result.x, result.y, result.z, result.w
+        return self
+
     def __sub__(self, other):
-        if isinstance(other, Vector4):
-            return Vector4(
-                self.x - other.x,
-                self.y - other.y,
-                self.z - other.z,
-                self.w - other.w
-            )
+        if isinstance(other, Quaternion):
+            return Quaternion(self.x - other.x, self.y - other.y, self.z - other.z, self.w - other.w)
         elif isinstance(other, (list, tuple)) and len(other) == 4:
-            return Vector4(
-                self.x - other[0],
-                self.y - other[1],
-                self.z - other[2],
-                self.w - other[3]
-            )
-        raise TypeError("Subtraction only supported between Vector4 instances or 4-element sequences")
+            return Quaternion(self.x - other[0], self.y - other[1], self.z - other[2], self.w - other[3])
+        raise TypeError(f"Unsupported type for subtraction: {type(other)}")
 
     def __mul__(self, other):
-        if isinstance(other, (int, float)):
-            return Vector4(
-                self.x * other,
-                self.y * other,
-                self.z * other,
-                self.w * other
+        if isinstance(other, Quaternion):
+            # Hamilton product
+            return Quaternion(
+                self.w * other.x + self.x * other.w + self.y * other.z - self.z * other.y,
+                self.w * other.y - self.x * other.z + self.y * other.w + self.z * other.x,
+                self.w * other.z + self.x * other.y - self.y * other.x + self.z * other.w,
+                self.w * other.w - self.x * other.x - self.y * other.y - self.z * other.z
             )
-        elif isinstance(other, Vector4):
-            return Vector4(
-                self.x * other.x,
-                self.y * other.y,
-                self.z * other.z,
-                self.w * other.w
-            )
-        raise TypeError("Unsupported type for multiplication")
+        raise TypeError("Quaternion can only be multiplied by another Quaternion")
 
     def __truediv__(self, other):
         if isinstance(other, (int, float)):
-            return Vector4(
-                self.x / other,
-                self.y / other,
-                self.z / other,
-                self.w / other
-            )
-        elif isinstance(other, Vector4):
-            return Vector4(
-                self.x / other.x if other.x != 0 else 0,
-                self.y / other.y if other.y != 0 else 0,
-                self.z / other.z if other.z != 0 else 0,
-                self.w / other.w if other.w != 0 else 0
-            )
+            return Quaternion(self.x / other, self.y / other, self.z / other, self.w / other)
+        elif isinstance(other, Quaternion):
+            return self * other.inverse()
         raise TypeError("Unsupported type for division")
 
-    def __repr__(self):
-        return f"Vector4({self.x}, {self.y}, {self.z}, {self.w})"
-
     def conjugate(self):
-        return Vector4(self.w, -self.x, -self.y, -self.z)
+        return Quaternion(-self.x, -self.y, -self.z, self.w)
 
-    def multiply(self, other):
-        w1, x1, y1, z1 = self.w, self.x, self.y, self.z
-        w2, x2, y2, z2 = other.w, other.x, other.y, other.z
-        return Vector4(
-            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
-            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
-            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
-            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
+    def norm(self):
+        return math.sqrt(self.x**2 + self.y**2 + self.z**2 + self.w**2)
+
+    def normalized(self):
+        n = self.norm()
+        if n == 0:
+            return Quaternion(0, 0, 0, 1)
+        return self / n
+
+    def inverse(self):
+        norm_sq = self.x ** 2 + self.y ** 2 + self.z ** 2 + self.w ** 2
+        return Quaternion(
+            -self.x / norm_sq,
+            -self.y / norm_sq,
+            -self.z / norm_sq,
+            self.w / norm_sq
         )
+
+    def to_euler(self):
+        """
+        Converts the quaternion to Euler angles (roll, pitch, yaw) in radians.
+        Convention: ZYX (yaw-pitch-roll)
+        Returns:
+            (roll, pitch, yaw)
+        """
+        x, y, z, w = self.x, self.y, self.z, self.w
+
+        # Roll (x-axis rotation)
+        sinr_cosp = 2 * (w * x + y * z)
+        cosr_cosp = 1 - 2 * (x * x + y * y)
+        roll = math.atan2(sinr_cosp, cosr_cosp)
+
+        # Pitch (y-axis rotation)
+        sinp = 2 * (w * y - z * x)
+        if abs(sinp) >= 1:
+            pitch = math.copysign(math.pi / 2, sinp)  # use 90 degrees if out of range
+        else:
+            pitch = math.asin(sinp)
+
+        # Yaw (z-axis rotation)
+        siny_cosp = 2 * (w * z + x * y)
+        cosy_cosp = 1 - 2 * (y * y + z * z)
+        yaw = math.atan2(siny_cosp, cosy_cosp)
+
+        return Vector3(roll, pitch, yaw)
+
+    def euler(self):
+        roll = self.x
+        pitch = self.y
+        yaw = self.z
+
+        c1 = math.cos(yaw / 2)
+        s1 = math.sin(yaw / 2)
+        c2 = math.cos(pitch / 2)
+        s2 = math.sin(pitch / 2)
+        c3 = math.cos(roll / 2)
+        s3 = math.sin(roll / 2)
+
+        w = c1 * c2 * c3 + s1 * s2 * s3
+        x = c1 * c2 * s3 - s1 * s2 * c3
+        y = c1 * s2 * c3 + s1 * c2 * s3
+        z = s1 * c2 * c3 - c1 * s2 * s3
+
+        return Quaternion(x, y, z, w)
+
+    @staticmethod
+    def axis_angle(axis, angle_rad):
+        """Create a quaternion representing a rotation of angle_rad around 'axis' (Vector3)."""
+        half_angle = angle_rad * 0.5
+        sin_half = math.sin(half_angle)
+        axis_n = axis.normalized()  # Make sure your Vector3 has this method
+
+        return Quaternion(
+            axis_n.x * sin_half,
+            axis_n.y * sin_half,
+            axis_n.z * sin_half,
+            math.cos(half_angle)
+        )
+
+    def rotate(self, v: Vector3) -> Vector3:
+        """
+        Rotate a Vector3 `v` by this quaternion.
+        """
+        qv = Quaternion(v.x, v.y, v.z, 0)
+        rotated = self * qv * self.inverse()
+        return Vector3(rotated.x, rotated.y, rotated.z)
+class Mesh_rander:
+    def __init__(self, vertices=None, edges=None, shape=None, obj_path=None):
+        self.shape = shape
+        self.colors = None
+        self.ctx = moderngl.create_standalone_context()
+        if obj_path:
+            self.vertices, self.triangles, self.edges, self.colors, self.vertex_shader, self.fragment_shader = self.load_model(
+                obj_path)
+
+            # Compile program
+            self.prog = self.ctx.program(
+                vertex_shader=self.vertex_shader,
+                fragment_shader=self.fragment_shader,
+            )
+
+        elif shape and vertices is None and edges is None:
+            generator = self.get_generator_function(shape)
+            if generator:
+                result = generator()
+                if len(result) == 2:  # Only vertices and edges
+                    self.vertices, self.edges = result
+                    self.triangles = None  # No triangle data available
+                elif len(result) == 3:  # Vertices, edges, triangles
+                    self.vertices, self.edges, self.triangles = result
+                else:
+                    raise ValueError("Shape generator must return (vertices, edges) or (vertices, edges, triangles)")
+            else:
+                raise ValueError(f"No generator found for shape: {shape}")
+
+        elif vertices is not None and edges is not None:
+            self.vertices = vertices
+            self.edges = edges
+            self.triangles = None  # User didn’t provide triangles
+
+        else:
+            raise ValueError("Must provide either a shape, .obj path, or both vertices and edges")
+
+    def get_generator_function(self, shape_name):
+        generators = {
+            "box": self.generate_cube,
+            "ellipsoid": self.generate_ellipsoid,
+            "cone": self.generate_cone,
+            "cylinder": self.generate_cylinder,
+            "pyramid": self.generate_pyramid,
+            "triangular_prism": self.generate_triangular_prism
+        }
+        return generators.get(shape_name)
+
+    @staticmethod
+    def load_model(path):
+        mesh = trimesh.load(path, force='mesh')
+
+        if not isinstance(mesh, trimesh.Trimesh):
+            raise TypeError("Loaded file is not a mesh")
+
+        # Convert vertices
+        vertices = [Vector3(*v) for v in mesh.vertices]
+
+        # Convert faces to triangles (used for solid rendering)
+        triangles = [tuple(face) for face in mesh.faces]
+
+        # Convert faces to edges (used for wireframe rendering)
+        edge_set = set()
+        for face in mesh.faces:
+            for i in range(3):
+                a = face[i]
+                b = face[(i + 1) % 3]
+                edge_set.add(tuple(sorted((a, b))))
+        edges = list(edge_set)
+
+        # Load vertex colors if available
+        if hasattr(mesh.visual, 'vertex_colors') and mesh.visual.vertex_colors is not None:
+            raw_colors = mesh.visual.vertex_colors[:, :3]
+            colors = [tuple(c / 255.0) for c in raw_colors]
+        elif hasattr(mesh.visual, 'material') and mesh.visual.material is not None:
+            diffuse = mesh.visual.material.diffuse
+            if diffuse is not None:
+                colors = [tuple(diffuse)] * len(vertices)
+            else:
+                colors = [(1.0, 1.0, 1.0)] * len(vertices)  # default white
+        else:
+            colors = [(1.0, 1.0, 1.0)] * len(vertices)  # default white
+
+        # Vertex Shader
+        vertex_shader = """
+        #version 330
+
+        in vec3 in_position;
+        in vec3 in_color;
+
+        uniform mat4 model;
+        uniform mat4 view;
+        uniform mat4 projection;
+
+        out vec3 v_color;
+
+        void main() {
+            gl_Position = projection * view * model * vec4(in_position, 1.0);
+            v_color = in_color;
+        }
+        """
+
+        # Fragment Shader
+        fragment_shader = """
+        #version 330
+
+        in vec3 v_color;
+        out vec4 fragColor;
+
+        void main() {
+            fragColor = vec4(v_color, 1.0);
+        }
+        """
+
+        return vertices, triangles, edges, colors, vertex_shader, fragment_shader
+
+    @staticmethod
+    def generate_cube():
+        cube_vertices = [
+            Vector3(-1, -1, -1), Vector3(1, -1, -1),
+            Vector3(1, 1, -1), Vector3(-1, 1, -1),
+            Vector3(-1, -1, 1), Vector3(1, -1, 1),
+            Vector3(1, 1, 1), Vector3(-1, 1, 1),
+        ]
+        cube_edges = [
+            (0, 1), (1, 2), (2, 3), (3, 0),
+            (4, 5), (5, 6), (6, 7), (7, 4),
+            (0, 4), (1, 5), (2, 6), (3, 7)
+        ]
+        return cube_vertices, cube_edges
+    @staticmethod
+    def generate_ellipsoid(rx=1, ry=1, rz=1, segments=12, rings=6):
+        vertices = []
+        edges = []
+
+        for i in range(rings + 1):
+            phi = math.pi * i / rings
+            for j in range(segments):
+                theta = 2 * math.pi * j / segments
+                x = rx * math.sin(phi) * math.cos(theta)
+                y = ry * math.cos(phi)
+                z = rz * math.sin(phi) * math.sin(theta)
+                vertices.append(Vector3(x, y, z))
+
+        for i in range(rings):
+            for j in range(segments):
+                current = i * segments + j
+                next_seg = current + 1 if (j + 1) < segments else i * segments
+                next_ring = current + segments
+                edges.append((current, next_seg))
+                if i < rings:
+                    edges.append((current, next_ring))
+        return vertices, edges
+    @staticmethod
+    def generate_cone(radius=1, height=2, segments=12):
+        vertices = [Vector3(0, height / 2, 0)]  # Tip of cone
+        base_center = Vector3(0, -height / 2, 0)
+        base_indices = []
+
+        for i in range(segments):
+            angle = 2 * math.pi * i / segments
+            x = radius * math.cos(angle)
+            z = radius * math.sin(angle)
+            vertices.append(Vector3(x, -height / 2, z))
+            base_indices.append(i + 1)
+
+        edges = [(0, i) for i in base_indices]  # Sides to tip
+        for i in range(segments):
+            edges.append((base_indices[i], base_indices[(i + 1) % segments]))  # Base circle
+        return vertices, edges
+    @staticmethod
+    def generate_pyramid(base_size=2, height=2):
+        half = base_size / 2
+        vertices = [
+            Vector3(-half, 0, -half),  # 0 base
+            Vector3(half, 0, -half),  # 1
+            Vector3(half, 0, half),  # 2
+            Vector3(-half, 0, half),  # 3
+            Vector3(0, height, 0)  # 4 tip
+        ]
+        edges = [
+            (0, 1), (1, 2), (2, 3), (3, 0),  # base
+            (0, 4), (1, 4), (2, 4), (3, 4)  # sides
+        ]
+        return vertices, edges
+    @staticmethod
+    def generate_cylinder(radius=1, height=2, segments=16):
+        vertices = []
+        edges = []
+
+        # Generate bottom and top circle vertices
+        for i in range(segments):
+            angle = 2 * math.pi * i / segments
+            x = radius * math.cos(angle)
+            z = radius * math.sin(angle)
+            vertices.append(Vector3(x, -height / 2, z))  # Bottom circle
+            vertices.append(Vector3(x, height / 2, z))  # Top circle
+
+        for i in range(segments):
+            bottom = i * 2
+            top = bottom + 1
+            next_bottom = (bottom + 2) % (2 * segments)
+            next_top = (top + 2) % (2 * segments)
+
+            # Vertical edge
+            edges.append((bottom, top))
+
+            # Bottom circle edge
+            edges.append((bottom, next_bottom))
+
+            # Top circle edge
+            edges.append((top, next_top))
+
+        return vertices, edges
+
+    @staticmethod
+    def generate_triangular_prism(base=1, height=1, depth=2):
+        h = math.sqrt(3) * base / 2
+        vertices = [
+            Vector3(-base / 2, -h / 3, -depth / 2),  # bottom front triangle
+            Vector3(base / 2, -h / 3, -depth / 2),
+            Vector3(0, 2 * h / 3, -depth / 2),
+            Vector3(-base / 2, -h / 3, depth / 2),  # back triangle
+            Vector3(base / 2, -h / 3, depth / 2),
+            Vector3(0, 2 * h / 3, depth / 2)
+        ]
+        edges = [
+            (0, 1), (1, 2), (2, 0),  # front
+            (3, 4), (4, 5), (5, 3),  # back
+            (0, 3), (1, 4), (2, 5)  # connecting edges
+        ]
+        return vertices, edges
+
+
+class Camera:
+    def __init__(self,width = 1920, hight =1080, FOV = 120,VIEWER_DISTANCE = 0, shading="wire"):
+        self.width = width
+        self.hight = hight
+        self.FOV = FOV
+        self.VIEWER_DISTANCE = VIEWER_DISTANCE
+        self.shading = shading
+
+
 
 class Position(Vector3): pass
 
@@ -267,6 +541,200 @@ class Size(Vector3):
     def __init__(self, x=1, y=1, z=1):
         super().__init__(x, y, z)
 
+class MeshCollider:
+    def __init__(self, vertices=None, object_pointer=None, is_trigger=False):
+        self.vertices = copy.deepcopy(vertices) or []  # Local-space Vector3
+        self.obj = object_pointer
+        self.is_trigger = is_trigger
+        self.enter = False
+
+    def generate_convex_hull_and_simplify(self, target_triangles=500):
+        """
+        Simplify a convex hull built from the given vertices using Open3D.
+        """
+        points_np = np.array([v.to_tuple() for v in self.vertices])
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points_np)
+
+        hull, _ = pcd.compute_convex_hull()
+        simplified = hull.simplify_quadric_decimation(target_number_of_triangles=target_triangles)
+        self.vertices = [Vector3(*p) for p in np.asarray(simplified.vertices)]
+
+    def get_world_vertices(self):
+        return [
+            rotate_vector_old(v, self.obj.position, self.obj.rotation) + self.obj.position
+            for v in self.vertices
+        ]
+
+    def extract_triangle_edges(self, vertices):
+        edges = set()
+        for i in range(0, len(vertices), 3):
+            if i + 2 < len(vertices):
+                a, b, c = vertices[i:i+3]
+                edges.update([
+                    (a, b),
+                    (b, c),
+                    (c, a),
+                ])
+        return edges
+
+    def get_axes(self, verts_a_world, verts_b_world):
+        axes = set()
+
+        def extract_normals(vertices):
+            for i in range(0, len(vertices), 3):
+                if i + 2 < len(vertices):
+                    a, b, c = vertices[i:i+3]
+                    normal = (b - a).cross(c - a).normalized()
+                    if normal.magnitude() > 1e-6:
+                        axes.add(normal.to_tuple())
+
+        # Face normals
+        extract_normals(verts_a_world)
+        extract_normals(verts_b_world)
+
+        # Edge cross products
+        edges_a = self.extract_triangle_edges(verts_a_world)
+        edges_b = self.extract_triangle_edges(verts_b_world)
+
+        for ea in edges_a:
+            dir_a = (ea[1] - ea[0]).normalized()
+            for eb in edges_b:
+                dir_b = (eb[1] - eb[0]).normalized()
+                cross = dir_a.cross(dir_b)
+                if cross.magnitude() > 1e-6:
+                    axes.add(cross.normalized().to_tuple())
+
+        return list(axes)
+
+    def project(self, vertices, axis):
+        axis = Vector3(*axis) if isinstance(axis, tuple) else axis
+        dots = [v.dot(axis) for v in vertices]
+        return min(dots), max(dots)
+
+    def check_collision(self, other):
+        other_collider = getattr(other, 'collider', other)
+        if other_collider is None:
+            return None
+
+        verts_a_world = self.get_world_vertices()
+        verts_b_world = other_collider.get_world_vertices()
+
+        axes = self.get_axes(verts_a_world, verts_b_world)
+
+        smallest_overlap = float('inf')
+        collision_axis = None
+
+        for axis in axes:
+            proj1 = self.project(verts_a_world, axis)
+            proj2 = self.project(verts_b_world, axis)
+
+            if proj1[1] < proj2[0] or proj2[1] < proj1[0]:
+                return None  # Separating axis found
+
+            overlap = min(proj1[1], proj2[1]) - max(proj1[0], proj2[0])
+            if overlap < smallest_overlap:
+                smallest_overlap = overlap
+                collision_axis = axis
+
+        # Compute collision normal and contact point
+        normal = Vector3(*collision_axis)
+        center_a = sum(verts_a_world, Vector3(0, 0, 0)) * (1 / len(verts_a_world))
+        center_b = sum(verts_b_world, Vector3(0, 0, 0)) * (1 / len(verts_b_world))
+
+        if (center_a - center_b).dot(normal) < 0:
+            normal = normal * -1
+
+        contact_point = (center_a + center_b) * 0.5
+        return contact_point, normal, smallest_overlap
+
+    def attach(self, owner_object):
+        self.size = owner_object.size
+        self.obj = owner_object
+        self.vertices = owner_object.mesh.vertices
+        self.generate_convex_hull_and_simplify()
+
+class SphereCollider:
+    def __init__(self, radii=Vector3(1, 1, 1), object_pointer=None, is_trigger=False):
+        self.radii = radii
+        self.obj = object_pointer
+        self.is_trigger = is_trigger
+        self.enter = False
+
+    def attach(self, owner_object):
+        self.obj = owner_object
+        self.radii = owner_object.size * 0.5  # assuming size represents full diameter
+
+    def OnCollisionEnter(self, other_collider):
+        self.enter = True
+        for component in self.parent.components.values():
+            if hasattr(component, 'OnCollisionEnter') and component.OnCollisionEnter is not None and component != self:
+                component.OnCollisionEnter(other_collider)
+
+    def OnCollisionStay(self, other_collider):
+        for component in self.parent.components.values():
+            if hasattr(component, 'OnCollisionStay') and component.OnCollisionStay is not None and component != self:
+                component.OnCollisionStay(other_collider)
+
+    def OnCollisionExit(self, other_collider):
+        self.enter = False
+        for component in self.parent.components.values():
+            if hasattr(component, 'OnCollisionExit') and component.OnCollisionExit is not None and component != self:
+                component.OnCollisionExit(other_collider)
+
+    def OnTriggerEnter(self, other_collider):
+        for component in self.parent.components.values():
+            if hasattr(component, 'OnTriggerEnter') and component.OnTriggerEnter is not None and component != self:
+                component.OnTriggerEnter(other_collider)
+
+    def check_collision(self, other):
+        other_collider = getattr(other, 'collider', other)
+        if other_collider is None:
+            return None
+
+        a_center = self.obj.position
+        b_center = other_collider.obj.position
+
+        # Convert both ellipsoids into unit spheres (by scaling)
+        a_to_unit = (b_center - a_center) / self.radii
+        b_to_unit = Vector3(0, 0, 0)
+        if isinstance(other_collider, SphereCollider):
+            b_to_unit = (a_center - b_center) / other_collider.radii
+        else:
+            # assume box collider is symmetric cube with uniform radius
+            box_half = other_collider.size * 0.5
+            b_to_unit = (a_center - b_center) / box_half
+
+        dist = a_to_unit.magnitude()
+        if dist < 2:  # in unit sphere space, two radii = 1 + 1
+            contact_point = (a_center + b_center) * 0.5
+            normal = (a_center - b_center).normalized()
+            overlap = 2 - dist  # estimated penetration depth
+
+            if self.is_trigger:
+                self.OnTriggerEnter(other_collider)
+            if other_collider.is_trigger:
+                other_collider.OnTriggerEnter(self)
+
+            if not self.enter:
+                self.OnCollisionEnter(other_collider)
+            else:
+                self.OnCollisionStay(other_collider)
+
+            if not other_collider.enter:
+                other_collider.OnCollisionEnter(self)
+            else:
+                other_collider.OnCollisionStay(self)
+
+            return contact_point, normal, overlap
+
+        # If previously in contact but no longer colliding
+        if self.enter:
+            self.OnCollisionExit(other_collider)
+        if other_collider.enter:
+            other_collider.OnCollisionExit(self)
+
+        return None
 
 class BoxCollider:
     def __init__(self, size=Vector3(1, 1, 1), object_pointer=None,is_trigger = False):
@@ -369,21 +837,6 @@ class BoxCollider:
         bounds.append([min_bound, max_bound])
         return bounds
 
-    # def get_box_corners(self):
-    #     center = self.obj.position
-    #     size = self.size
-    #     half = size * 0.5
-    #
-    #     # All 8 corner offsets from center (±x, ±y, ±z)
-    #     offsets = [
-    #         Vector3(x, y, z)
-    #         for x in (-half.x, half.x)
-    #         for y in (-half.y, half.y)
-    #         for z in (-half.z, half.z)
-    #     ]
-    #
-    #     corners = [rotate_vector(center + offset, center, self.obj.rotation) for offset in offsets]
-    #     return corners
 
     def check_collision(self, other):
         other_collider = getattr(other, 'collider', other)
@@ -549,10 +1002,31 @@ class BoxCollider:
             other_collider.OnCollisionStay(self)
         return contact_point, normal, smallest_overlap
 
+    def attach(self, owner_object):
+        self.size = owner_object.size
+        self.obj = owner_object
+
+
 class Material:
-    def __init__(self,kind ="Steel",color="white"):
+    COLOR_MAP = {
+        "white": (1.0, 1.0, 1.0),
+        "black": (0.0, 0.0, 0.0),
+        "red": (1.0, 0.0, 0.0),
+        "green": (0.0, 1.0, 0.0),
+        "blue": (0.0, 0.0, 1.0),
+        "yellow": (1.0, 1.0, 0.0),
+        "gray": (0.5, 0.5, 0.5),
+        # Add more as needed
+    }
+
+    def __init__(self, kind="Steel", color="white"):
         self.kind = kind
-        self.color = color
+        # self.color = color
+        if isinstance(color, tuple) and len(color) == 3 and all(isinstance(c, (int, float)) for c in color):
+            # Already RGB
+            self.color = color
+        else:
+            self.color = self.COLOR_MAP.get(color.lower(), (1.0, 1.0, 1.0))  # default to white
 
 class Rigidbody:
     _friction_table = {
@@ -642,7 +1116,18 @@ class Rigidbody:
             torque.z / self.inertia.z
         )
 
-import PPO
+    def attach(self, owner_object):
+        self.size = owner_object.size
+        self.position = owner_object.position
+        self.center_of_mass = owner_object.position
+        self.obj = owner_object
+        self.material = owner_object.material.kind
+        self.inertia = Vector3(
+            (1 / 12) * self.mass * (owner_object.size.y ** 2 + owner_object.size.z ** 2),  # I_x
+            (1 / 12) * self.mass * (owner_object.size.x ** 2 + owner_object.size.z ** 2),  # I_y
+            (1 / 12) * self.mass * (owner_object.size.x ** 2 + owner_object.size.y ** 2)  # I_z
+        )
+
 class Joint:
     def __init__(self,other=None, position=None, rotation=None, look_position=True, look_rotation=False):
         self.other = other
@@ -752,12 +1237,7 @@ class FixJoint:
 #         self.last_value = None
 
 class Object:
-    @property
-    def quaternion(self):
-        if self._rotation_dirty:
-            self._quaternion = self._compute_quaternion()
-            self._rotation_dirty = False
-        return self._quaternion
+
 
     def _compute_quaternion(self):
         roll = self.rotation.x
@@ -776,7 +1256,7 @@ class Object:
         y = c1 * s2 * c3 + s1 * c2 * s3
         z = s1 * c2 * c3 - c1 * s2 * s3
 
-        return Vector4(x, y, z, w)
+        return Quaternion(x, y, z, w)
     @property
     def local_position(self):
         if self.parent is None:
@@ -832,65 +1312,15 @@ class Object:
         #         comp.obj = obj_copy
 
         return obj_copy
+
     def add_component(self, name, component):
-
-        if name == "rigidbody":
-            if isinstance(component, tuple):
-                rb = Rigidbody(*component)
-            elif isinstance(component, Rigidbody):
-                rb = component
-            else:
-                raise TypeError("Invalid type for Rigidbody")
-
-            # Configure based on Object
-            rb.size = self.size
-            rb.position = self.position
-            rb.center_of_mass = self.position
-            rb.obj = self
-            rb.material = self.material.kind
-            rb.inertia = Vector3(
-                (1 / 12) * rb.mass * (rb.obj.size.y ** 2 + rb.obj.size.z ** 2),  # I_x
-                (1 / 12) * rb.mass * (rb.obj.size.x ** 2 + rb.obj.size.z ** 2),  # I_y
-                (1 / 12) * rb.mass * (rb.obj.size.x ** 2 + rb.obj.size.y ** 2)  # I_z
-            )
-            component = rb
-        elif name == "collider":
-            if isinstance(component, tuple):
-                boxcollider = BoxCollider(*component)
-            elif isinstance(component, BoxCollider):
-                boxcollider = component
-            else:
-                raise TypeError("Invalid type for BoxCollider")
-
-            # Configure based on Object
-            boxcollider.size = self.size
-            boxcollider.obj = self
-            # boxcollider.is_trigger = False
-            component = boxcollider
-        elif name == "joint":
-            # Automatically attach joint to this object
-            if hasattr(component, "attach"):
-                component.attach(self)
-        # elif name == "joint":
-        #     if isinstance(component, tuple):
-        #         joint = Joint(*component)
-        #     elif isinstance(component, Joint):
-        #         joint = component
-        #     else:
-        #         raise TypeError("Invalid type for Joint")
-        #     # joint.other.rigidbody.force = self.rigidbody.force
-        elif name == "agent":
-            if isinstance(component, tuple):
-                agent = PPO.Agent(*component)
-            elif isinstance(component, PPO.Agent):
-                agent = component
-            else:
-                raise TypeError("Invalid type for Agent")
-        # Save component
+        if hasattr(component, "attach"):
+            component.attach(self)
         self.components[name] = component
         component.parent = self  # optional back-reference
         if hasattr(component, 'start') and component.start is not None:
             component.start()
+
     def __init__(self, position=None, rotation=None, size=None, children=None, components=None,
                  name=""):
         self.parent = None
@@ -898,7 +1328,6 @@ class Object:
         self.name = name
         self.size = Size(*size) if isinstance(size, tuple) else size or Size()
         self.components = components or {}
-
         self.local_rotation = LocalRotation()
 
         for child in self.children:
@@ -915,9 +1344,10 @@ class Object:
         # self.collider = BoxCollider(self.size, self) if size else None
         self.world = None
         # self.local_position = self.local_position()
-        self._quaternion = self._compute_quaternion()
+        self.quaternion = self._compute_quaternion()
         self._rotation_dirty = False
         self.add_component("material",Material())
+        self.add_component("mesh", Mesh_rander(shape="box"))
 
         def findWorld(child):
             parent = child.parent
@@ -1422,14 +1852,19 @@ class Object:
             joint = child.get_component("joint")
             if joint is not None:
                 joint.solve(dt)
-
+    def Start(self):
+        children1 = self.get_all_children_bereshit()
+        for child in children1:
+            for component in child.components.values():
+                if hasattr(component, 'Start') and component.Start is not None:
+                    component.Start()
     def update(self, dt,chack =True):
-        children = self.get_all_children_bereshit()
+        children1 = self.get_all_children_bereshit()
         if chack :
-            for child in children:
+            for child in children1:
                 for component in child.components.values():
-                        if hasattr(component, 'main') and component.main is not None:
-                            component.main()
+                        if hasattr(component, 'Update') and component.Update is not None:
+                            component.Update()
         children =self.get_all_children_physics()
         self.Stage1(children) # APPLY GRAVITY and external forces
         self.Stage3(children,dt) # handel collisions and friction
@@ -1439,7 +1874,9 @@ class Object:
             rb = child.get_component("rigidbody")
             if rb is not None:
                 child.integrat(dt)
-
+        for child in children1:
+            # child.quaternion = child._compute_quaternion()
+            child.rotation = child.quaternion.to_euler()
         # self.Stage2(children) # handel joints
         # self.Stage4(children) # handel friction
 
@@ -1986,7 +2423,7 @@ def rotate_vector_old(vector, pivot, angles):
     temp = R @ (vector - pivot) + pivot
 
     return Vector3(temp[0], temp[1], temp[2])
-def rotate_vector(vector, pivot, rotation: Vector4):
+def rotate_vector(vector, pivot, rotation: Quaternion):
     """
     Rotate 'vector' around 'pivot' using quaternion 'rotation' (Vector4).
     """
@@ -1998,7 +2435,7 @@ def rotate_vector(vector, pivot, rotation: Vector4):
     rel_v = v_np - p_np
 
     # Represent as pure quaternion
-    v_quat = Vector4(0.0, rel_v[0], rel_v[1], rel_v[2])
+    v_quat = Quaternion(0.0, rel_v[0], rel_v[1], rel_v[2])
 
     # q * v * q^-1
     q_conj = rotation.conjugate()
@@ -2011,6 +2448,21 @@ def rotate_vector(vector, pivot, rotation: Vector4):
     result = rotated_v + p_np
 
     return Vector3(result[0], result[1], result[2])
+
+
+def rotate_vector_quaternion(vector, quaternion):
+    q = quaternion.normalized()
+    q_conj = q.conjugate()
+
+    # Pure quaternion from vector: x, y, z go into x, y, z, and w = 0
+    vec_quat = Quaternion(vector.x, vector.y, vector.z, 0)
+
+    # Apply rotation: q * v * q_conj
+    rotated = q * vec_quat * q_conj
+
+    # Extract rotated vector part
+    return Vector3(rotated.x, rotated.y, rotated.z)
+
 
 # def inverse_rotate_vector(vector, quaternion_angles):
 #     inverse_quaternion = Vector3(-quaternion_angles.x, -quaternion_angles.y, -quaternion_angles.z)
