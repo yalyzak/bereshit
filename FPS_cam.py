@@ -36,6 +36,7 @@ class rotate:
 
         # self.parent.quaternion = pitch_q * yaw_q   # Rotate identity, not previous rotation
         self.parent.quaternion = yaw_q * pitch_q
+        # self.parent.quaternion *= Quaternion.euler(Vector3(0.001,0,0))
         mouse.move(CENTER_X, CENTER_Y)
 
     def Update(self):

@@ -1,5 +1,5 @@
 import Core
-from bereshit import Object,Camera
+from bereshit import Object, Camera, Vector3, Rigidbody, BoxCollider, FixJoint
 from FPS_cam import rotate
 from CamController import CamController
 servo_right_down = Object(position=(0, -6.25, 0), rotation=(0, 0, 0), size=(6, 6.5, 2))
@@ -35,21 +35,43 @@ upper_leg_l = Object(size=(3.8, 15, 3.8), position=(0, -10.75, 0), children=[ser
 
 servo_left_up_side = Object(position=(0, -6.25, 0), rotation=(0, 0, 0), size=(4, 3.9, 2), children=[])
 
-servo_left_up = Object(size=(4, 4, 2), position=(-14.5, -3.5/2 + -4, 0), children=[])
+leg_left2 = Object(size=(4, 4, 2), position=(-14.5, -3.5/2 + -4, 0), children=[])
 
-leg_left = Object(size=(5.2, 3.5, 4), position=(-14.5, -3.5/2, 0), children=[])
+leg_left2.add_component("rigidbody", Rigidbody(useGravity=True))
+leg_left2.add_component("collider", BoxCollider())
 
-hip = Object(position=(0, 3.5/2, 0), size=(38.2, 3.5, 3.8), children=[leg_left])  # previously also leg_right and spine_1
+leg_left = Object(size=(5.2, 3.5, 4), position=(-14.5, -3.5/2, 0), children=[leg_left2])
+
+leg_left.add_component("rigidbody", Rigidbody(useGravity=False))
+leg_left.add_component("collider", BoxCollider())
+# leg_left.add_component("joint", FixJoint(other_object=leg_left2))
+
+hip = Object(position=(0, 3.5/2, 6), size=(38.2, 3.5, 3.8), children=[])  # previously also leg_right and spine_1
+
+hip.add_component("rigidbody", Rigidbody(useGravity=True))
+hip.add_component("collider", BoxCollider())
+
+# hip.add_component("joint", FixJoint(other_object=leg_left))
 
 ground = Object(position=(0, -64, 0), size=(20, 1, 20))
+ground.add_component("rigidbody", Rigidbody(isKinematic=True))
+ground.add_component("collider", BoxCollider())
 
-camera = Object(size=(0,0,0))
+camera = Object(size=(1,1,1))
 
 camera.add_component("camera",Camera())
 
 camera.add_component("FPS_cam",rotate())
 camera.add_component("CamController",CamController())
+camera.add_component("rigidbody", Rigidbody(useGravity=True))
+camera.add_component("collider", BoxCollider())
 
-world = Object(position=(0, 0, 0), size=(0, 0, 0), children=[hip,camera,servo_left_up])
+scene = Object(
+    position=Vector3(0, 0, 0),
+    size=(0, 0, 0),
+    children=[hip,ground],
+    name="scene"
+)
+world = Object(position=(0, 0, 0), size=(0, 0, 0), children=[camera,scene])
 
 Core.run(world)

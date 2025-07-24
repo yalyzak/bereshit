@@ -3,15 +3,16 @@ import threading
 import time
 
 import bereshit
-import render
+import render as render
 
+# import old_render as render
 
 
 def run(world,speed=1):
     TARGET_FPS = 60
     # bereshit.dt = TARGET_FPS * 0.000165
 
-    dt = 1 / 600
+    dt = 1 / 60
 
     startg = time.time()
     FPS = 1
@@ -19,8 +20,8 @@ def run(world,speed=1):
     async def main_logic():
         start_wall_time = time.time()
         steps = 0
-        # speed = 5  # real time slip
-        bereshit.dt = (10 / ((1 / dt) / 60) * speed)
+        # speed = 1  # real time slip
+        # bereshit.dt = (10 / ((1 / dt) / 60) * speed)
         world.Start()
         while True:
             steps += 1

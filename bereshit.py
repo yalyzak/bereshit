@@ -334,7 +334,11 @@ class Mesh_rander:
             raise TypeError("Loaded file is not a mesh")
 
         # Convert vertices
+        # vertices = [Vector3(*v) for v in mesh.vertices]
+        # Convert and center vertices
         vertices = [Vector3(*v) for v in mesh.vertices]
+        centroid = sum(vertices, Vector3()) * (1.0 / len(vertices))
+        vertices = [v - centroid for v in vertices]
 
         # Convert faces to triangles (used for solid rendering)
         triangles = [tuple(face) for face in mesh.faces]
@@ -407,6 +411,8 @@ class Mesh_rander:
             (4, 5), (5, 6), (6, 7), (7, 4),
             (0, 4), (1, 5), (2, 6), (3, 7)
         ]
+        # centroid = sum(cube_vertices, Vector3()) * (1.0 / len(cube_vertices))
+        # cube_vertices = [v - centroid for v in cube_vertices]
         return cube_vertices, cube_edges
     @staticmethod
     def generate_ellipsoid(rx=1, ry=1, rz=1, segments=12, rings=6):
@@ -1043,7 +1049,7 @@ class Rigidbody:
     _default_friction = 0.6
     def __init__(self, obj=None, mass=1.0, size=Vector3(1, 1, 1), position=Vector3(0, 0, 0),
                  center_of_mass=Vector3(0, 0, 0), velocity=None, angular_velocity=Vector3(), force=None,
-                 isKinematic=False, useGravity=True, drag=1, friction_coefficient=0.0,restitution=0.3):
+                 isKinematic=False, useGravity=None, drag=1, friction_coefficient=0.0,restitution=0.3):
         self.mass = mass
         self.material = ""
         self.drag = drag
@@ -1057,7 +1063,9 @@ class Rigidbody:
         self.torque = Vector3()
         self.force = force or Vector3(0, 0, 0)
         self.isKinematic = isKinematic
+
         self.useGravity = useGravity
+
         self.angular_velocity = angular_velocity
         self.normal_force = Vector3()
         if self.obj != None:
@@ -1166,10 +1174,10 @@ class FixJoint:
         self.bodyA.position -= 0.5 * correction
         self.bodyB.position += 0.5 * correction
 
-        # Optionally correct velocity
+        # Velocity correction (reduce relative motion)
         rel_velocity = self.bodyB.velocity - self.bodyA.velocity
-        self.bodyA.velocity += 0.5 * rel_velocity
-        self.bodyB.velocity -= 0.5 * rel_velocity
+        self.bodyA.velocity += 0.5 * (-rel_velocity)
+        self.bodyB.velocity += 0.5 * (rel_velocity)
 
 
 # class AgentController:
@@ -1348,6 +1356,7 @@ class Object:
         self._rotation_dirty = False
         self.add_component("material",Material())
         self.add_component("mesh", Mesh_rander(shape="box"))
+
 
         def findWorld(child):
             parent = child.parent
@@ -1875,110 +1884,7 @@ class Object:
             if rb is not None:
                 child.integrat(dt)
         for child in children1:
-            # child.quaternion = child._compute_quaternion()
             child.rotation = child.quaternion.to_euler()
-        # self.Stage2(children) # handel joints
-        # self.Stage4(children) # handel friction
-
-
-    # def resolve_kinematic_collision(self, child, normal, contact_point, normal_force):
-    #     self.rigidbody.force += normal_force
-    #     if child.get_component("rigidbody") is None:
-    #         e = self.rigidbody.restitution  # Coefficient of restitution (e = 0: perfectly inelastic, e = 1: elastic)
-    #         v2_n = 0  # still allowed, but v2_n should be constant
-    #         v1_n = self.rigidbody.velocity.dot(normal)  # normal component of self's velocity
-    #         relative_velocity = self.rigidbody.velocity - Vector3(0,0,0)
-    #
-    #     else:
-    #         e = child.rigidbody.restitution  # Coefficient of restitution (e = 0: perfectly inelastic, e = 1: elastic)
-    #         v2_n = child.rigidbody.velocity.dot(normal)  # still allowed, but v2_n should be constant
-    #         v1_n = self.rigidbody.velocity.dot(normal)  # normal component of self's velocity
-    #         relative_velocity = self.rigidbody.velocity - child.rigidbody.velocity
-    #
-    #
-    #     if relative_velocity.dot(normal) < 0:
-    #         # === Linear velocity update ===
-    #         # Compute new normal velocity after bounce
-    #         new_v1_n = -e * (
-    #                 v1_n - v2_n) + v2_n  # This preserves relative speed and direction based on e
-    #
-    #         # Apply delta only to self (child is kinematic)
-    #         delta_v_n = (new_v1_n - v1_n) * normal
-    #         self.rigidbody.velocity += delta_v_n
-    #
-    #         # === Angular velocity update ===
-    #         r = contact_point - self.rigidbody.center_of_mass
-    #         impulse = self.rigidbody.mass * delta_v_n
-    #         angular_impulse = r.cross(impulse)
-    #         # self.rigidbody.angular_velocity += angular_impulse / self.rigidbody.inertia
-    #
-    #     r = contact_point - self.rigidbody.center_of_mass
-    #     torque = r.cross(normal_force)
-    #     # self.rigidbody.torque += torque
-    #
-    # def resolve_dynamic_collision(self, child, normal, contact_point, normal_force):
-    #     # Compute normal force to cancel the penetration force between two dynamic bereshit
-    #
-    #
-    #
-    #     self.rigidbody.force += normal_force
-    #
-    #     # child.rigidbody.force -= normal_force  # Equal and opposite
-    #
-    #     e = min(self.rigidbody.restitution, child.rigidbody.restitution)
-    #
-    #     v1_n = self.rigidbody.velocity.dot(normal)
-    #
-    #     v2_n = child.rigidbody.velocity.dot(normal)
-    #
-    #     relative_velocity = self.rigidbody.velocity - child.rigidbody.velocity
-    #
-    #     if relative_velocity.dot(normal) < 0:
-    #         # Total mass
-    #
-    #         m1 = self.rigidbody.mass
-    #
-    #         m2 = child.rigidbody.mass
-    #
-    #         # Compute impulse scalar
-    #
-    #         j = -(1 + e) * (v1_n - v2_n) / (1 / m1 + 1 / m2)
-    #
-    #         impulse = j * normal
-    #
-    #         # Linear velocity update
-    #
-    #         self.rigidbody.velocity += impulse / m1
-    #
-    #         child.rigidbody.velocity -= impulse / m2
-    #
-    #         # Angular velocity update
-    #
-    #         r1 = contact_point - self.rigidbody.center_of_mass
-    #
-    #         r2 = contact_point - child.rigidbody.center_of_mass
-    #
-    #         angular_impulse1 = r1.cross(impulse)
-    #
-    #         angular_impulse2 = r2.cross(impulse * -1)
-    #
-    #         # self.rigidbody.angular_velocity += angular_impulse1 / self.rigidbody.inertia
-    #
-    #         # child.rigidbody.angular_velocity += angular_impulse2 / child.rigidbody.inertia
-    #
-    #     # Torque from normal force
-    #
-    #     r1 = contact_point - self.rigidbody.center_of_mass
-    #
-    #     r2 = contact_point - child.rigidbody.center_of_mass
-    #
-    #     torque1 = r1.cross(normal_force)
-    #
-    #     torque2 = r2.cross(normal_force * -1)
-    #
-    #     # self.rigidbody.torque += torque1
-    #
-    #     # child.rigidbody.torque += torque2
 
     def apply_friction(self, normal_force, dt):
         rb = self.rigidbody
@@ -2030,7 +1936,7 @@ class Object:
         self.rigidbody.force = Vector3(0, 0, 0)
         self.rigidbody.torque = Vector3(0, 0, 0)
         # self.add_rotation(ang_disp)
-        children = self.get_all_children_bereshit()
+        children = self.get_all_children_not_physics()
         for child in children:
             child.position += self.rigidbody.velocity * dt \
                          + 0.5 * self.rigidbody.acceleration * dt * dt
@@ -2246,6 +2152,15 @@ class Object:
             rb = child.get_component("rigidbody")
             collider = child.get_component("collider")
             if rb and collider:
+                all_objs.append(child)
+            all_objs.extend(child.get_all_children_physics())
+        return all_objs
+    def get_all_children_not_physics(self):
+        all_objs = []
+        for child in self.children:
+            rb = child.get_component("rigidbody")
+            # collider = child.get_component("collider")
+            if not rb:
                 all_objs.append(child)
             all_objs.extend(child.get_all_children_physics())
         return all_objs

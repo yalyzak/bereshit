@@ -138,19 +138,17 @@ class BereshitRenderer(moderngl_window.WindowConfig):
             obj = item['obj']
             pos = obj.position.to_np()
             size = obj.size.to_np()
-            rot = obj.quaternion  # your custom Quaternion
+            rot = obj.quaternion
 
+            # Use object's rotation
+            pyrr_obj_q = PyrrQuat([rot.x, rot.y, rot.z, rot.w])
+            obj_rot_matrix = Matrix44.from_quaternion(pyrr_obj_q)
 
-            verts = [v.to_np() for v in obj.mesh.vertices]
-            centroid = np.mean(verts, axis=0)
-            verts = [(v.to_np() - centroid) * size * 0.5 for v in obj.mesh.vertices]
-            model = Matrix44.from_translation(pos) @ rot_matrix @ Matrix44.from_scale((1.0, 1.0, 1.0))
-
-            # Convert custom quaternion to pyrr-compatible
-            # pyrr_q = PyrrQuat([rot.x, rot.y, rot.z, rot.w])
-            # rot_matrix = Matrix44.from_quaternion(pyrr_q)
-            #
-            # model = Matrix44.from_translation(pos) @ rot_matrix @ Matrix44.from_scale(size * 0.5)
+            model = (
+                    Matrix44.from_translation(pos)
+                    @ Matrix44.from_quaternion(PyrrQuat([rot.x, rot.y, rot.z, rot.w]))
+                   # @ Matrix44.from_scale(size)
+            )
 
             self.prog['model'].write(model.astype('f4').tobytes())
             self.prog['view'].write(self.view.astype('f4').tobytes())
