@@ -79,6 +79,16 @@ class Vector3:
 
     def __hash__(self):
         return hash((self.x, self.y, self.z))
+    def __rmatmul__(self, matrix):
+        """
+        Enables: matrix @ Vector3
+        Assumes matrix is a 3x3 NumPy array or list-of-lists.
+        """
+        if isinstance(matrix, (list, tuple)):
+            matrix = np.array(matrix)
+        result = matrix @ self.to_np()
+        return Vector3.from_np(result)
+
     def dis(self, other: 'Vector3') -> float:
         dx = self.x - other.x
         dy = self.y - other.y
@@ -106,6 +116,11 @@ class Vector3:
 
     def to_np(self):
         return np.array([self.x, self.y, self.z], dtype='f4')
+
+    @classmethod
+    def from_np(cls, arr):
+        """Create a Vector3 from a NumPy array or list."""
+        return cls(arr[0], arr[1], arr[2])
 
     def magnitude(self):
         return (self.x ** 2 + self.y ** 2 + self.z ** 2) ** 0.5
@@ -236,7 +251,7 @@ class Quaternion:
         cosy_cosp = 1 - 2 * (y * y + z * z)
         yaw = math.atan2(siny_cosp, cosy_cosp)
 
-        return Vector3(roll, pitch, yaw)
+        return Vector3(math.degrees(roll), math.degrees(pitch), math.degrees(yaw))
 
     def euler(self):
         roll = self.x
@@ -244,6 +259,7 @@ class Quaternion:
         yaw = self.z
 
         c1 = math.cos(yaw / 2)
+
         s1 = math.sin(yaw / 2)
         c2 = math.cos(pitch / 2)
         s2 = math.sin(pitch / 2)
@@ -271,6 +287,29 @@ class Quaternion:
             math.cos(half_angle)
         )
 
+    def to_axis_angle(self):
+        """Convert this quaternion to (axis: Vector3, angle: float)"""
+        if abs(self.w) > 1:
+            self = self.normalized()
+
+        angle = 2 * math.acos(self.w)
+        s = math.sqrt(1 - self.w * self.w)
+
+        if s < 1e-6:
+            # If s is too small, return arbitrary axis
+            return Vector3(1, 0, 0), 0.0
+        else:
+            return Vector3(self.x / s, self.y / s, self.z / s), angle
+
+    def to_matrix3(self):
+        """Returns a 3x3 rotation matrix (as numpy array) from this quaternion."""
+        x, y, z, w = self.x, self.y, self.z, self.w
+
+        return np.array([
+            [1 - 2 * y * y - 2 * z * z, 2 * x * y - 2 * z * w, 2 * x * z + 2 * y * w],
+            [2 * x * y + 2 * z * w, 1 - 2 * x * x - 2 * z * z, 2 * y * z - 2 * x * w],
+            [2 * x * z - 2 * y * w, 2 * y * z + 2 * x * w, 1 - 2 * x * x - 2 * y * y]
+        ])
     def rotate(self, v: Vector3) -> Vector3:
         """
         Rotate a Vector3 `v` by this quaternion.
@@ -279,6 +318,8 @@ class Quaternion:
         rotated = self * qv * self.inverse()
         return Vector3(rotated.x, rotated.y, rotated.z)
 class Mesh_rander:
+    def attach(self, owner_object):
+        return "Mesh"
     def __init__(self, vertices=None, edges=None, shape=None, obj_path=None):
         self.shape = shape
         self.colors = None
@@ -322,7 +363,9 @@ class Mesh_rander:
             "cone": self.generate_cone,
             "cylinder": self.generate_cylinder,
             "pyramid": self.generate_pyramid,
-            "triangular_prism": self.generate_triangular_prism
+            "triangular_prism": self.generate_triangular_prism,
+            "empty": self.generate_empty
+
         }
         return generators.get(shape_name)
 
@@ -517,6 +560,11 @@ class Mesh_rander:
         ]
         return vertices, edges
 
+    @staticmethod
+    def generate_empty():
+        cube_vertices = []
+        cube_edges = []
+        return cube_vertices, cube_edges
 
 class Camera:
     def __init__(self,width = 1920, hight =1080, FOV = 120,VIEWER_DISTANCE = 0, shading="wire"):
@@ -659,6 +707,7 @@ class MeshCollider:
         self.obj = owner_object
         self.vertices = owner_object.mesh.vertices
         self.generate_convex_hull_and_simplify()
+        return "collider"
 
 class SphereCollider:
     def __init__(self, radii=Vector3(1, 1, 1), object_pointer=None, is_trigger=False):
@@ -671,6 +720,7 @@ class SphereCollider:
         self.obj = owner_object
         self.radii = owner_object.size * 0.5  # assuming size represents full diameter
 
+        return "collider"
     def OnCollisionEnter(self, other_collider):
         self.enter = True
         for component in self.parent.components.values():
@@ -851,63 +901,7 @@ class BoxCollider:
 
         # --- Internal Functions ---
 
-        def quaternion_to_rotation_matrix(q):
-            w, x, y, z = q.w, q.x, q.y, q.z
-            xx = x * x
-            yy = y * y
-            zz = z * z
-            xy = x * y
-            xz = x * z
-            yz = y * z
-            wx = w * x
-            wy = w * y
-            wz = w * z
-
-            return np.array([
-                [1 - 2 * (yy + zz), 2 * (xy - wz), 2 * (xz + wy)],
-                [2 * (xy + wz), 1 - 2 * (xx + zz), 2 * (yz - wx)],
-                [2 * (xz - wy), 2 * (yz + wx), 1 - 2 * (xx + yy)]
-            ])
-
-        def euler_to_rotation_matrix(euler):
-            """
-            euler: Vector3 with x=roll, y=pitch, z=yaw, in radians
-            """
-            cx = math.cos(euler.x)
-            sx = math.sin(euler.x)
-            cy = math.cos(euler.y)
-            sy = math.sin(euler.y)
-            cz = math.cos(euler.z)
-            sz = math.sin(euler.z)
-
-            R_x = np.array([
-                [1, 0, 0],
-                [0, cx, -sx],
-                [0, sx, cx]
-            ])
-
-            R_y = np.array([
-                [cy, 0, sy],
-                [0, 1, 0],
-                [-sy, 0, cy]
-            ])
-
-            R_z = np.array([
-                [cz, -sz, 0],
-                [sz, cz, 0],
-                [0, 0, 1]
-            ])
-
-            # Combine rotations: R = Rz * Ry * Rx
-            R = R_z @ R_y @ R_x
-            return R
         def get_axes(rotation):
-            # R = euler_to_rotation_matrix(rotation_quaternion)
-            #
-            # right = Vector3(*R[:, 0])  # First column
-            # up = Vector3(*R[:, 1])  # Second column
-            # forward = Vector3(*R[:, 2])  # Third column
-
             R = get_rotation_matrix(rotation)
 
             right_v = R @ np.array([1, 0, 0])
@@ -917,10 +911,6 @@ class BoxCollider:
             right = Vector3(*right_v).normalized()
             up = Vector3(*up_v).normalized()
             forward = Vector3(*forward_v).normalized()
-
-            # right = rotate_vector_old(Vector3(1, 0, 0), Vector3(0, 0, 0), rotation).normalized()
-            # up = rotate_vector_old(Vector3(0, 1, 0), Vector3(0, 0, 0), rotation).normalized()
-            # forward = rotate_vector_old(Vector3(0, 0, 1), Vector3(0, 0, 0), rotation).normalized()
             return [right, up, forward]
 
         def project_box(center, axes, half_sizes, axis):
@@ -1011,7 +1001,7 @@ class BoxCollider:
     def attach(self, owner_object):
         self.size = owner_object.size
         self.obj = owner_object
-
+        return "collider"
 
 class Material:
     COLOR_MAP = {
@@ -1033,7 +1023,8 @@ class Material:
             self.color = color
         else:
             self.color = self.COLOR_MAP.get(color.lower(), (1.0, 1.0, 1.0))  # default to white
-
+    def attach(self,owner_object):
+        return "material"
 class Rigidbody:
     _friction_table = {
         ("Steel", "Concrete"): 0.6,
@@ -1048,8 +1039,8 @@ class Rigidbody:
     }
     _default_friction = 0.6
     def __init__(self, obj=None, mass=1.0, size=Vector3(1, 1, 1), position=Vector3(0, 0, 0),
-                 center_of_mass=Vector3(0, 0, 0), velocity=None, angular_velocity=Vector3(), force=None,
-                 isKinematic=False, useGravity=None, drag=1, friction_coefficient=0.0,restitution=0.3):
+                 center_of_mass=Vector3(0, 0, 0), velocity=None, angular_velocity=None, force=None,
+                 isKinematic=False, useGravity=True, drag=0.8, friction_coefficient=0.0,restitution=0.7):
         self.mass = mass
         self.material = ""
         self.drag = drag
@@ -1059,21 +1050,18 @@ class Rigidbody:
         self.center_of_mass = center_of_mass if center_of_mass else position
         self.velocity = velocity or Vector3(0, 0, 0)
         self.acceleration = Vector3()
-        self.angular_acceleration = Vector3()
+        self.angular_acceleration = Vector3(0,0,0)
         self.torque = Vector3()
         self.force = force or Vector3(0, 0, 0)
         self.isKinematic = isKinematic
 
         self.useGravity = useGravity
 
+        if angular_velocity is None:
+            angular_velocity = Vector3(0, 0, 0)
         self.angular_velocity = angular_velocity
+
         self.normal_force = Vector3()
-        if self.obj != None:
-            self.inertia = Vector3(
-                (1 / 12) * self.mass * (self.obj.size.y ** 2 + self.obj.size.z ** 2),  # I_x
-                (1 / 12) * self.mass * (self.obj.size.x ** 2 + self.obj.size.z ** 2),  # I_y
-                (1 / 12) * self.mass * (self.obj.size.x ** 2 + self.obj.size.y ** 2)  # I_z
-            )
 
     def _get_friction(self, other_rb):
         """
@@ -1100,29 +1088,29 @@ class Rigidbody:
         self.acceleration += acceleration
         self.obj.integrat2(dt)
 
-    def apply_torque(self, force: Vector3, application_point: Vector3):
-        # Offset from center of mass to point of application
-        r = application_point - self.obj.position  # self.position = center of mass
+    # def apply_torque(self, force: Vector3, application_point: Vector3):
+    #     # Offset from center of mass to point of application
+    #     r = application_point - self.obj.position  # self.position = center of mass
+    #
+    #     # Torque = r × F (cross product)
+    #     torque = r.cross(force)
+    #
+    #     # Add to total torque
+    #     self.torque += torque
 
-        # Torque = r × F (cross product)
-        torque = r.cross(force)
-
-        # Add to total torque
-        self.torque += torque
-
-    def exert_angular_acceleration(self, force, application_point=Vector3):
-        # Offset from center of mass to point of application
-        r = application_point - self.obj.position  # r = lever arm from CoM
-
-        # Torque = r × F
-        torque = r.cross(force)
-
-        # Angular acceleration = torque / inertia
-        self.angular_acceleration += Vector3(
-            torque.x / self.inertia.x,
-            torque.y / self.inertia.y,
-            torque.z / self.inertia.z
-        )
+    # def exert_angular_acceleration(self, force, application_point=Vector3):
+    #     # Offset from center of mass to point of application
+    #     r = application_point - self.obj.position  # r = lever arm from CoM
+    #
+    #     # Torque = r × F
+    #     torque = r.cross(force)
+    #
+    #     # Angular acceleration = torque / inertia
+    #     self.angular_acceleration += Vector3(
+    #         torque.x / self.inertia.x,
+    #         torque.y / self.inertia.y,
+    #         torque.z / self.inertia.z
+    #     )
 
     def attach(self, owner_object):
         self.size = owner_object.size
@@ -1130,11 +1118,24 @@ class Rigidbody:
         self.center_of_mass = owner_object.position
         self.obj = owner_object
         self.material = owner_object.material.kind
+
+        EPSILON = 1e-8  # Small value to avoid division by zero
+
         self.inertia = Vector3(
             (1 / 12) * self.mass * (owner_object.size.y ** 2 + owner_object.size.z ** 2),  # I_x
             (1 / 12) * self.mass * (owner_object.size.x ** 2 + owner_object.size.z ** 2),  # I_y
             (1 / 12) * self.mass * (owner_object.size.x ** 2 + owner_object.size.y ** 2)  # I_z
         )
+
+        def safe_inverse(value):
+            return 1.0 / value if abs(value) > EPSILON else 0.0
+
+        self.inverse_inertia = np.diag([
+            safe_inverse(self.inertia.x),
+            safe_inverse(self.inertia.y),
+            safe_inverse(self.inertia.z)
+        ])
+
 
 class Joint:
     def __init__(self,other=None, position=None, rotation=None, look_position=True, look_rotation=False):
@@ -1149,7 +1150,7 @@ class FixJoint:
         """
         self.other_object = other_object
         self.bodyA = None  # Will be filled in at attach time
-        self.bodyB = other_object.get_component("rigidbody")
+        self.bodyB = other_object.get_component("Rigidbody")
 
         # Compute initial offset
         self.local_offset = None
@@ -1158,26 +1159,55 @@ class FixJoint:
         """
         Called when this component is attached to an object.
         """
-        self.bodyA = owner_object.get_component("rigidbody")
+        self.bodyA = owner_object.get_component("Rigidbody")
         if self.bodyA is None or self.bodyB is None:
             raise ValueError("FixJoint requires both objects to have rigidbodies")
+        if self.bodyB.isKinematic:
+            raise ValueError("can not joint a Kinematic body")
         self.local_offset = self.bodyB.position - self.bodyA.position
+        self.anchor_world = self.bodyA.position + self.local_offset
+        self.defaultA = self.bodyA.parent.quaternion
+        self.defaultB = self.bodyB.parent.quaternion
+        return  "joint"
 
     def solve(self, dt):
         """
-        Enforce the fixed relative position constraint.
+        Enforce linear velocity matching at the joint point (no relative motion).
+        Only linear impulse correction (ignores angular).
         """
-        target_position = self.bodyA.position + self.local_offset
-        correction = target_position - self.bodyB.position
+        deltaA = self.bodyA.parent.quaternion.conjugate() * self.defaultA
 
-        # Split correction evenly
-        self.bodyA.position -= 0.5 * correction
-        self.bodyB.position += 0.5 * correction
+        deltaB = self.defaultB - self.bodyB.parent.quaternion
+        local_offset = rotate_vector_quaternion(self.local_offset,deltaA)
 
-        # Velocity correction (reduce relative motion)
-        rel_velocity = self.bodyB.velocity - self.bodyA.velocity
-        self.bodyA.velocity += 0.5 * (-rel_velocity)
-        self.bodyB.velocity += 0.5 * (rel_velocity)
+
+        # Velocities at anchor points
+        vA = self.bodyA.velocity  # ignoring angular contribution
+        vB = self.bodyB.velocity
+
+        # Relative velocity
+        v_rel = vB - vA
+
+        # Effective mass
+        inv_massA = 1.0 / self.bodyA.mass if self.bodyA.mass > 0 else 0.0
+        inv_massB = 1.0 / self.bodyB.mass if self.bodyB.mass > 0 else 0.0
+        if self.bodyA.isKinematic:
+            inv_massA = 0
+        effective_mass = 1.0 / (inv_massA + inv_massB) if (inv_massA + inv_massB) > 0 else 0.0
+
+        # Compute impulse to cancel relative velocity
+        impulse = v_rel * (-effective_mass)
+        target_position_B = self.bodyA.position + local_offset
+        correction = target_position_B - self.bodyB.position
+        if not self.bodyA.isKinematic and not self.bodyB.isKinematic:
+            # Both dynamic — apply impulse to both
+            self.bodyA.velocity -= impulse * inv_massA
+            self.bodyB.velocity += impulse * inv_massB
+        elif not self.bodyB.isKinematic:
+            # Only B is dynamic — treat A as fixed
+            self.bodyB.velocity += impulse * inv_massB
+            self.bodyB.position += correction
+
 
 
 # class AgentController:
@@ -1215,13 +1245,13 @@ class FixJoint:
 #
 #     def apply_action(self, action):
 #         if action == 0:
-#             self.obj.rigidbody.velocity.z += 0.5
+#             self.obj.Rigidbody.velocity.z += 0.5
 #         elif action == 1:
-#             self.obj.rigidbody.velocity.x += -0.5
+#             self.obj.Rigidbody.velocity.x += -0.5
 #         elif action == 2:
-#             self.obj.rigidbody.velocity.z += -0.5
+#             self.obj.Rigidbody.velocity.z += -0.5
 #         elif action == 3:
-#             self.obj.rigidbody.velocity.x += 0.5
+#             self.obj.Rigidbody.velocity.x += 0.5
 #
 #     def store_experience(self, reward, done):
 #         self.agent.store((
@@ -1248,9 +1278,9 @@ class Object:
 
 
     def _compute_quaternion(self):
-        roll = self.rotation.x
-        pitch = self.rotation.y
-        yaw = self.rotation.z
+        roll = math.radians(self.rotation.x)
+        pitch = math.radians(self.rotation.y)
+        yaw = math.radians(self.rotation.z)
 
         c1 = math.cos(yaw / 2)
         s1 = math.sin(yaw / 2)
@@ -1321,9 +1351,17 @@ class Object:
 
         return obj_copy
 
-    def add_component(self, name, component):
-        if hasattr(component, "attach"):
-            component.attach(self)
+    def add_component(self, component, name=None):
+        if name is None:
+            name = component.__class__.__name__
+            if hasattr(component, "attach"):
+                result = component.attach(self)
+                if result is not None:
+                    name = result
+        else:
+            if hasattr(component, "attach"):
+                component.attach(self)  # call it, but ignore the result
+
         self.components[name] = component
         component.parent = self  # optional back-reference
         if hasattr(component, 'start') and component.start is not None:
@@ -1354,8 +1392,8 @@ class Object:
         # self.local_position = self.local_position()
         self.quaternion = self._compute_quaternion()
         self._rotation_dirty = False
-        self.add_component("material",Material())
-        self.add_component("mesh", Mesh_rander(shape="box"))
+        self.add_component(Material())
+        self.add_component(Mesh_rander(shape="box"))
 
 
         def findWorld(child):
@@ -1512,13 +1550,13 @@ class Object:
 
     def Stage1(self,children):
 
-        rb = self.get_component("rigidbody")
+        rb = self.get_component("Rigidbody")
 
         center_of_mass = [self.position]
         if rb is not None:
             for child in children:
                 center_of_mass.append(child.position)
-            self.rigidbody.center_of_mass = Vector3.mean(center_of_mass)
+            self.Rigidbody.center_of_mass = Vector3.mean(center_of_mass)
 
         if self.parent == None:  # the world does not need an update
             for child in children:
@@ -1529,20 +1567,20 @@ class Object:
             return
 
         # === 2) APPLY GRAVITY (AND TORSOUE DUE TO GRAVITY) ===
-        if self.rigidbody.useGravity:
+        if self.Rigidbody.useGravity:
             gravity = Vector3(0, -9.8, 0)
-            self.rigidbody.force += gravity * self.rigidbody.mass
+            self.Rigidbody.force += gravity * self.Rigidbody.mass
 
             # If you want torque from gravity:
-            # r = self.position - self.rigidbody.center_of_mass
-            # gravity_torque = r.cross(gravity * self.rigidbody.mass)
-            # self.rigidbody.torque += gravity_torque
+            # r = self.position - self.Rigidbody.center_of_mass
+            # gravity_torque = r.cross(gravity * self.Rigidbody.mass)
+            # self.Rigidbody.torque += gravity_torque
     def Stage2(self,children):
         if self.parent == None:  # the world does not need an update
             for child in children:
                 child.Stage2(children)
             return
-        rb = self.get_component("rigidbody")
+        rb = self.get_component("Rigidbody")
 
         if rb is None or rb.isKinematic:
             return
@@ -1550,22 +1588,22 @@ class Object:
         if joint is not None:
             # Get common acceleration
             # Net force applied to both bodies
-            net_force = self.rigidbody.force + self.joint.other.rigidbody.force
+            net_force = self.Rigidbody.force + self.joint.other.Rigidbody.force
 
             # Common acceleration both bodies should have
-            common_acceleration = net_force / (self.rigidbody.mass + self.joint.other.rigidbody.mass)
+            common_acceleration = net_force / (self.Rigidbody.mass + self.joint.other.Rigidbody.mass)
 
             # What force each body *should* have to achieve this common acceleration
-            desired_force_self = common_acceleration * self.rigidbody.mass
-            desired_force_other = common_acceleration * self.joint.other.rigidbody.mass
+            desired_force_self = common_acceleration * self.Rigidbody.mass
+            desired_force_other = common_acceleration * self.joint.other.Rigidbody.mass
 
             # Compute the difference between the actual forces and desired forces
-            correction_self = (desired_force_self - self.rigidbody.force)
-            correction_other =( desired_force_other - self.joint.other.rigidbody.force)
+            correction_self = (desired_force_self - self.Rigidbody.force)
+            correction_other =( desired_force_other - self.joint.other.Rigidbody.force)
 
             # Applying corrections
-            self.rigidbody.force += correction_self
-            self.joint.other.rigidbody.force += correction_other
+            self.Rigidbody.force += correction_self
+            self.joint.other.Rigidbody.force += correction_other
 
     def Stage3(self, children, dt):
         contacts = []
@@ -1575,13 +1613,13 @@ class Object:
         # STEP 1: Collect all contacts
         for i in range(len(children)):
             obj1 = children[i]
-            rb1 = obj1.get_component("rigidbody")
+            rb1 = obj1.get_component("Rigidbody")
 
             for j in range(i + 1, len(children)):
                 obj2 = children[j]
-                rb2 = obj2.get_component("rigidbody")
+                rb2 = obj2.get_component("Rigidbody")
 
-                # Skip if neither has a rigidbody or both are kinematic
+                # Skip if neither has a Rigidbody or both are kinematic
                 if (rb1 is None or rb1.isKinematic) and (rb2 is None or rb2.isKinematic):
                     continue
 
@@ -1657,67 +1695,115 @@ class Object:
         # STEP 5: Apply impulses using helper functions
         for i, contact in enumerate(contacts):
             J = impulses[i]
+            if contact["v_norm"] > 0:
+                continue
+            print(f"[DEBUG] v_norm = {contact['v_norm']:.5f}, J = {J:.5f}")
 
             if contact["rb1"] and contact["rb2"]:
                 if not contact["rb1"].isKinematic and not contact["rb2"].isKinematic: # contact["rb1"].parent.name == "obj" and contact["rb2"].parent.name == "obj2"
                     self.resolve_dynamic_collision(contact, J)
+                    self.apply_friction_impulse(contact, normal, J)
                 elif not contact["rb1"].isKinematic or not contact["rb2"].isKinematic:
                     self.resolve_kinematic_collision(contact, J)
-                Jn = impulses[i]
+                    self.apply_friction_impulse(contact, normal, J)
 
-                # After applying normal impulse, recompute relative velocity
-                v1 = contact["rb1"].velocity if contact["rb1"] and not contact["rb1"].isKinematic else Vector3(0, 0, 0)
-                v2 = contact["rb2"].velocity if contact["rb2"] and not contact["rb2"].isKinematic else Vector3(0, 0, 0)
-                v_rel = v1 - v2
+    def apply_friction_impulse(self, contact, normal, Jn):
+        """
+        Applies Coulomb friction impulse based on the relative velocity,
+        including angular friction effect.
+        """
+        rb1 = contact["rb1"]
+        rb2 = contact["rb2"]
+        contact_point = contact["contact_point"]  # required for torque calculation
 
-                # Tangential component
-                tangent = v_rel - normal * v_rel.dot(normal)
-                tangent_length = tangent.magnitude()
+        v1 = rb1.velocity if rb1 and not rb1.isKinematic else Vector3(0, 0, 0)
+        v2 = rb2.velocity if rb2 and not rb2.isKinematic else Vector3(0, 0, 0)
+        v_rel = v1 - v2
 
-                if tangent_length > 1e-6:
-                    tangent = tangent.normalized()
-                    # Friction coefficient: choose or get from materials
-                    if contact["rb1"] and contact["rb2"]:
-                        mu = contact["rb1"]._get_friction(contact["rb2"])
-                    elif contact["rb1"]:
-                        mu = contact["rb1"].friction_coefficient
-                    elif contact["rb2"]:
-                        mu = contact["rb2"].friction_coefficient
-                    else:
-                        mu = Rigidbody._default_friction
+        tangent = v_rel - normal * v_rel.dot(normal)
+        tangent_length = tangent.magnitude()
 
-                    # Compute friction impulse magnitude
-                    Jt_magnitude = -v_rel.dot(tangent)
-                    denom = 0.0
-                    if contact["rb1"] and not contact["rb1"].isKinematic:
-                        denom += 1.0 / contact["rb1"].mass
-                    if contact["rb2"] and not contact["rb2"].isKinematic:
-                        denom += 1.0 / contact["rb2"].mass
+        if tangent_length < 1e-6:
+            return  # No significant tangential motion
 
-                    if denom > 0.0:
-                        Jt_magnitude /= denom
+        tangent = tangent.normalized()
 
-                        # Clamp to Coulomb limit
-                        max_friction = mu * Jn
-                        Jt_magnitude = max(-max_friction, min(Jt_magnitude, max_friction))
+        # Friction coefficient
+        if rb1 and rb2:
+            mu = rb1._get_friction(rb2)
+        elif rb1:
+            mu = rb1.friction_coefficient
+        elif rb2:
+            mu = rb2.friction_coefficient
+        else:
+            mu = Rigidbody._default_friction
 
-                        # Friction impulse vector
-                        Jt = tangent * Jt_magnitude
+        # Compute friction impulse scalar
+        Jt_magnitude = -v_rel.dot(tangent)
+        denom = 0.0
+        if rb1 and not rb1.isKinematic:
+            denom += 1.0 / rb1.mass
+        if rb2 and not rb2.isKinematic:
+            denom += 1.0 / rb2.mass
 
-                        # Apply friction impulse
-                        if contact["rb1"] and not contact["rb1"].isKinematic:
-                            contact["rb1"].velocity += Jt / contact["rb1"].mass
-                        if contact["rb2"] and not contact["rb2"].isKinematic:
-                            contact["rb2"].velocity -= Jt / contact["rb2"].mass
+        if denom == 0.0:
+            return
+
+        Jt_magnitude /= denom
+        max_friction = mu * Jn
+        Jt_magnitude = max(-max_friction, min(Jt_magnitude, max_friction))
+
+        Jt = tangent * Jt_magnitude
+
+        # Apply linear and angular friction impulses
+        if rb1 and not rb1.isKinematic:
+            rb1.velocity += Jt / rb1.mass
+            r1 = contact_point - rb1.position
+            angular_impulse1 = r1.cross(Jt)
+            # rb1.angular_velocity += Vector3.from_np(rb1.inverse_inertia @ angular_impulse1.to_np())
+
+        if rb2 and not rb2.isKinematic:
+            rb2.velocity -= Jt / rb2.mass
+            r2 = contact_point - rb2.position
+            angular_impulse2 = r2.cross(-Jt)
+            # rb2.angular_velocity += Vector3.from_np(rb2.inverse_inertia @ angular_impulse2.to_np())
+
+    # def resolve_dynamic_collision(self, contact, J):
+    #     """
+    #     Applies impulse to both dynamic bodies, factoring restitution.
+    #     """
+    #     n = contact["normal"]
+    #     rb1 = contact["rb1"]
+    #     rb2 = contact["rb2"]
+    #
+    #     # Default restitution
+    #     restitution = 0.0
+    #     if rb1 and rb2:
+    #         restitution = min(rb1.restitution, rb2.restitution)
+    #     elif rb1:
+    #         restitution = rb1.restitution
+    #     elif rb2:
+    #         restitution = rb2.restitution
+    #
+    #     # Adjust impulse by restitution
+    #     J *= (1 + restitution)
+    #
+    #     impulse_vec = n * J
+    #
+    #     if rb1 and not rb1.isKinematic:
+    #         rb1.velocity += impulse_vec / rb1.mass
+    #     if rb2 and not rb2.isKinematic:
+    #         rb2.velocity -= impulse_vec / rb2.mass
+
     def resolve_dynamic_collision(self, contact, J):
         """
-        Applies impulse to both dynamic bodies, factoring restitution.
+        Applies linear and angular impulse to both dynamic bodies, factoring restitution.
         """
         n = contact["normal"]
+        contact_point = contact["point"]  # world-space contact point
         rb1 = contact["rb1"]
         rb2 = contact["rb2"]
 
-        # Default restitution
         restitution = 0.0
         if rb1 and rb2:
             restitution = min(rb1.restitution, rb2.restitution)
@@ -1726,21 +1812,31 @@ class Object:
         elif rb2:
             restitution = rb2.restitution
 
-        # Adjust impulse by restitution
         J *= (1 + restitution)
-
         impulse_vec = n * J
-
+        # impulse_vec = np.maximum(impulse_vec, 0.0)
         if rb1 and not rb1.isKinematic:
             rb1.velocity += impulse_vec / rb1.mass
+
+            # Angular impulse for rb1
+            r1 = contact_point - rb1.position  # lever arm
+            # angular_impulse1 = r1.cross(impulse_vec)
+            # rb1.angular_velocity += Vector3.from_np(rb1.inverse_inertia @ angular_impulse1.to_np())
+
         if rb2 and not rb2.isKinematic:
             rb2.velocity -= impulse_vec / rb2.mass
 
+            # Angular impulse for rb2
+            r2 = contact_point - rb2.position
+            # angular_impulse2 = r2.cross(impulse_vec)
+            # rb2.angular_velocity += Vector3.from_np(rb2.inverse_inertia @ angular_impulse2.to_np())
+
     def resolve_kinematic_collision(self, contact, J):
         """
-        Applies impulse to only the dynamic body, factoring restitution.
+        Applies linear and angular impulse to the dynamic body only, factoring restitution.
         """
         n = contact["normal"]
+        contact_point = contact["contact_point"]  # world-space contact point
         rb1 = contact["rb1"]
         rb2 = contact["rb2"]
 
@@ -1753,13 +1849,27 @@ class Object:
             restitution = rb2.restitution
 
         J *= (1 + restitution)
-
         impulse_vec = n * J
+
 
         if rb1 and not rb1.isKinematic:
             rb1.velocity += impulse_vec / rb1.mass
+
+            # Angular impulse for rb1
+            r1 = contact_point - rb1.position
+            angular_impulse1 = r1.cross(impulse_vec)
+            R = rb1.parent.quaternion.to_matrix3()  # Convert quaternion to 3×3 rotation matrix
+            I_inv_world = R @ rb1.inverse_inertia @ R.T
+
+            rb1.angular_velocity += Vector3.from_np(I_inv_world @ angular_impulse1.to_np())
+
         elif rb2 and not rb2.isKinematic:
             rb2.velocity -= impulse_vec / rb2.mass
+
+            # Angular impulse for rb2
+            r2 = contact_point - rb2.position
+            angular_impulse2 = r2.cross(-impulse_vec)
+            rb2.angular_velocity += Vector3.from_np(rb2.inverse_inertia @ angular_impulse2.to_np())
 
     # def Stage3(self,children):
     #
@@ -1768,7 +1878,7 @@ class Object:
     #         for child in children:
     #             child.Stage3(children)
     #         return
-    #     rb = self.get_component("rigidbody")
+    #     rb = self.get_component("Rigidbody")
     #
     #     if rb is None or rb.isKinematic:
     #         return
@@ -1790,10 +1900,10 @@ class Object:
     #                 # rb.force *= 0.8
     #                 continue  # No collision
     #             contact_point, normal = result
-    #             normal_force = self.rigidbody.force.reduce_vector_along_direction(normal * -1) * -1
-    #             normal_force = normal * self.rigidbody.force * -1
+    #             normal_force = self.Rigidbody.force.reduce_vector_along_direction(normal * -1) * -1
+    #             normal_force = normal * self.Rigidbody.force * -1
     #             # total_normal_force += normal_force
-    #             if child.get_component("rigidbody") is None or child.rigidbody.isKinematic:
+    #             if child.get_component("Rigidbody") is None or child.Rigidbody.isKinematic:
     #                 self.resolve_kinematic_collision(child, normal, contact_point, normal_force)
     #             else:
     #                 self.resolve_dynamic_collision(child, normal, contact_point, normal_force)
@@ -1809,7 +1919,7 @@ class Object:
     #         for child in children:
     #             child.Stage3(children)
     #         return
-    #     rb = self.get_component("rigidbody")
+    #     rb = self.get_component("Rigidbody")
     #
     #     if rb is None or rb.isKinematic:
     #         return
@@ -1831,7 +1941,7 @@ class Object:
     #         force_along_normal = normal * rb.force.dot(normal) * -1
     #
     #         normal_forces += force_along_normal
-    #         if child.get_component("rigidbody") is None or child.rigidbody.isKinematic:
+    #         if child.get_component("Rigidbody") is None or child.Rigidbody.isKinematic:
     #             self.resolve_kinematic_collision(child, normal, contact_point, force_along_normal)
     #         else:
     #             self.resolve_dynamic_collision(child, normal, contact_point, force_along_normal)
@@ -1844,7 +1954,7 @@ class Object:
             for child in children:
                 child.Stage4(children)
             return
-        rb = self.get_component("rigidbody")
+        rb = self.get_component("Rigidbody")
 
         if rb is None or rb.isKinematic:
             return
@@ -1866,28 +1976,36 @@ class Object:
         for child in children1:
             for component in child.components.values():
                 if hasattr(component, 'Start') and component.Start is not None:
-                    component.Start()
+                    try:
+                        component.Start()
+                    except Exception as e:
+                        print(f"[Error] Exception in {component.__class__.__name__}.Start(): {e}")
     def update(self, dt,chack =True):
         children1 = self.get_all_children_bereshit()
         if chack :
             for child in children1:
                 for component in child.components.values():
                         if hasattr(component, 'Update') and component.Update is not None:
-                            component.Update()
+                            try:
+                                component.Update()
+                            except Exception as e:
+                                print(f"[Error] Exception in {component.__class__.__name__}.Update(): {e}")
+
         children =self.get_all_children_physics()
         self.Stage1(children) # APPLY GRAVITY and external forces
         self.Stage3(children,dt) # handel collisions and friction
         self.solve_joints(children, dt)
 
         for child in children:
-            rb = child.get_component("rigidbody")
+            rb = child.get_component("Rigidbody")
             if rb is not None:
                 child.integrat(dt)
+
         for child in children1:
             child.rotation = child.quaternion.to_euler()
 
     def apply_friction(self, normal_force, dt):
-        rb = self.rigidbody
+        rb = self.Rigidbody
         friction_limit = normal_force.magnitude() * rb.friction_coefficient
 
         if rb.velocity.magnitude() > 0:
@@ -1915,82 +2033,87 @@ class Object:
 
         # === 4) INTEGRATION PHASE ===
         # 4.1) Linear acceleration & velocity:
-        self.rigidbody.acceleration = self.rigidbody.force / self.rigidbody.mass
-        self.rigidbody.acceleration.y *= self.rigidbody.drag
+        self.Rigidbody.acceleration = self.Rigidbody.force / self.Rigidbody.mass
+        # self.Rigidbody.acceleration.y *= self.Rigidbody.drag
 
-        self.rigidbody.velocity += self.rigidbody.acceleration * dt
+        self.Rigidbody.velocity += self.Rigidbody.acceleration * dt
         # 4.2) Angular acceleration & velocity (component‐wise):
-        self.rigidbody.angular_acceleration = Vector3(
-            self.rigidbody.torque.x / self.rigidbody.inertia.x if self.rigidbody.inertia.x != 0 else 0,
-            self.rigidbody.torque.y / self.rigidbody.inertia.y if self.rigidbody.inertia.y != 0 else 0,
-            self.rigidbody.torque.z / self.rigidbody.inertia.z if self.rigidbody.inertia.z != 0 else 0
+        self.Rigidbody.angular_acceleration = Vector3(
+            self.Rigidbody.torque.x / self.Rigidbody.inertia.x if self.Rigidbody.inertia.x != 0 else 0,
+            self.Rigidbody.torque.y / self.Rigidbody.inertia.y if self.Rigidbody.inertia.y != 0 else 0,
+            self.Rigidbody.torque.z / self.Rigidbody.inertia.z if self.Rigidbody.inertia.z != 0 else 0
         )
-        self.rigidbody.angular_velocity += self.rigidbody.angular_acceleration * dt
-
+        self.Rigidbody.angular_velocity += self.Rigidbody.angular_acceleration * dt
+        # self.Rigidbody.angular_velocity *= self.Rigidbody.drag
         # 4.3) Integrate rotation
-        ang_disp = self.rigidbody.angular_velocity * dt \
-                   + 0.5 * self.rigidbody.angular_acceleration * dt * dt
+        ang_disp = self.Rigidbody.angular_velocity * dt \
+                   + 0.5 * self.Rigidbody.angular_acceleration * dt * dt
 
-        self.position += self.rigidbody.velocity * dt \
-                         + 0.5 * self.rigidbody.acceleration * dt * dt
-        self.rigidbody.force = Vector3(0, 0, 0)
-        self.rigidbody.torque = Vector3(0, 0, 0)
+        # self.quaternion *=
+        self.quaternion *= Quaternion.euler(ang_disp)
+
+
+        self.position += self.Rigidbody.velocity * dt \
+                         + 0.5 * self.Rigidbody.acceleration * dt * dt
+
+        self.Rigidbody.force = Vector3(0, 0, 0)
+        self.Rigidbody.torque = Vector3(0, 0, 0)
         # self.add_rotation(ang_disp)
         children = self.get_all_children_not_physics()
         for child in children:
-            child.position += self.rigidbody.velocity * dt \
-                         + 0.5 * self.rigidbody.acceleration * dt * dt
+            child.position += self.Rigidbody.velocity * dt \
+                         + 0.5 * self.Rigidbody.acceleration * dt * dt
 
         # if self.get_component("joint") != None:
         #     if self.joint.look_position:
-        #         self.joint.other.position += self.rigidbody.velocity * dt \
-        #                          + 0.5 * self.rigidbody.acceleration * dt * dt
+        #         self.joint.other.position += self.Rigidbody.velocity * dt \
+        #                          + 0.5 * self.Rigidbody.acceleration * dt * dt
         # 4.5) Angular damping
-        # self.rigidbody.angular_velocity *= 0.98
+        # self.Rigidbody.angular_velocity *= 0.98
 
         # 4.6) Reset torques for next frame
 
-        self.rigidbody.angular_acceleration = Vector3(0, 0, 0)
-        self.rigidbody.torque = Vector3(0, 0, 0)
+        self.Rigidbody.angular_acceleration = Vector3(0, 0, 0)
+        self.Rigidbody.torque = Vector3(0, 0, 0)
     # def integrat2(self, dt):
     #
     #     # === 4) INTEGRATION PHASE ===
-    #     self.rigidbody.velocity += self.rigidbody.acceleration * dt
+    #     self.Rigidbody.velocity += self.Rigidbody.acceleration * dt
     #     # 4.2) Angular acceleration & velocity (component‐wise):
-    #     self.rigidbody.angular_acceleration = Vector3(
-    #         self.rigidbody.torque.x / self.rigidbody.inertia.x if self.rigidbody.inertia.x != 0 else 0,
-    #         self.rigidbody.torque.y / self.rigidbody.inertia.y if self.rigidbody.inertia.y != 0 else 0,
-    #         self.rigidbody.torque.z / self.rigidbody.inertia.z if self.rigidbody.inertia.z != 0 else 0
+    #     self.Rigidbody.angular_acceleration = Vector3(
+    #         self.Rigidbody.torque.x / self.Rigidbody.inertia.x if self.Rigidbody.inertia.x != 0 else 0,
+    #         self.Rigidbody.torque.y / self.Rigidbody.inertia.y if self.Rigidbody.inertia.y != 0 else 0,
+    #         self.Rigidbody.torque.z / self.Rigidbody.inertia.z if self.Rigidbody.inertia.z != 0 else 0
     #     )
-    #     self.rigidbody.angular_velocity += self.rigidbody.angular_acceleration * dt
+    #     self.Rigidbody.angular_velocity += self.Rigidbody.angular_acceleration * dt
     #
     #     # 4.3) Integrate rotation
-    #     ang_disp = self.rigidbody.angular_velocity * dt \
-    #                + 0.5 * self.rigidbody.angular_acceleration * dt * dt
+    #     ang_disp = self.Rigidbody.angular_velocity * dt \
+    #                + 0.5 * self.Rigidbody.angular_acceleration * dt * dt
     #     if self.get_component("joint") != None:
     #         if not self.joint.look_position:
     #             # 4.4) Integrate position
     #
-    #             self.position += self.rigidbody.velocity * dt \
-    #                              + 0.5 * self.rigidbody.acceleration * dt * dt
+    #             self.position += self.Rigidbody.velocity * dt \
+    #                              + 0.5 * self.Rigidbody.acceleration * dt * dt
     #             self.set_position(self.position)
     #         if not self.joint.look_rotation:
     #             self.add_rotation(ang_disp)
     #     else:
     #         # 4.4) Integrate position
-    #         self.position += self.rigidbody.velocity * dt \
-    #                          + 0.5 * self.rigidbody.acceleration * dt * dt
+    #         self.position += self.Rigidbody.velocity * dt \
+    #                          + 0.5 * self.Rigidbody.acceleration * dt * dt
     #
     #         self.set_position(self.position)
     #
     #         self.add_rotation(ang_disp)
     #
     #     # 4.5) Angular damping
-    #     # self.rigidbody.angular_velocity *= 0.98
+    #     # self.Rigidbody.angular_velocity *= 0.98
     #
     #     # 4.6) Reset torques for next frame
-    #     self.rigidbody.angular_acceleration = Vector3(0, 0, 0)
-    #     self.rigidbody.torque = Vector3(0, 0, 0)
+    #     self.Rigidbody.angular_acceleration = Vector3(0, 0, 0)
+    #     self.Rigidbody.torque = Vector3(0, 0, 0)
 
     # def set_local_position(self):
     #     for child in self.children:
@@ -2106,7 +2229,7 @@ class Object:
     def find_center_of_gravity(self):
         bereshit = self.get_all_children_bereshit()
         positions = [obj.position.to_tuple() for obj in bereshit]
-        masses = [obj.rigidbody.mass for obj in bereshit]
+        masses = [obj.Rigidbody.mass for obj in bereshit]
         x_cog, y_cog, z_cog = calculate_center_of_gravity_3d(positions, masses)
         print(f"Center of Gravity: ({x_cog:.2f}, {y_cog:.2f}, {z_cog:.2f})")
 
@@ -2125,9 +2248,9 @@ class Object:
 
     def reset_to_default(self):
         self.position = copy.copy(self.__default_position)
-        if self.get_component("rigidbody") is not None:
-            self.rigidbody.acceleration = Vector3(0,0,0)
-            self.rigidbody.velocity = Vector3(0,0,0)
+        if self.get_component("Rigidbody") is not None:
+            self.Rigidbody.acceleration = Vector3(0,0,0)
+            self.Rigidbody.velocity = Vector3(0,0,0)
 
         for child in self.children:
             child.reset_to_default()
@@ -2149,7 +2272,7 @@ class Object:
     def get_all_children_physics(self):
         all_objs = []
         for child in self.children:
-            rb = child.get_component("rigidbody")
+            rb = child.get_component("Rigidbody")
             collider = child.get_component("collider")
             if rb and collider:
                 all_objs.append(child)
@@ -2158,7 +2281,7 @@ class Object:
     def get_all_children_not_physics(self):
         all_objs = []
         for child in self.children:
-            rb = child.get_component("rigidbody")
+            rb = child.get_component("Rigidbody")
             # collider = child.get_component("collider")
             if not rb:
                 all_objs.append(child)
@@ -2297,7 +2420,7 @@ def compute_axes_from_euler(rotation):
     return [right, up, forward]
 def get_rotation_matrix(angles):
     angles = np.array([angles.x, angles.y, angles.z])
-    angle_x, angle_y, angle_z = np.radians(angles)
+    angle_x, angle_y, angle_z = np.radians(-angles)
 
     R_x = np.array([
         [1, 0, 0],

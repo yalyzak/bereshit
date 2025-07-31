@@ -6,7 +6,7 @@ from bereshit import Vector3,rotate_vector_quaternion
 from bereshit import Quaternion
 
 class CamController:
-    def __init__(self,speed=1):
+    def __init__(self,speed=0.3):
         self.force_amount = speed
         self.force_amount2 = speed
 

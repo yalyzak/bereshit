@@ -19,13 +19,13 @@ class BereshitRenderer(moderngl_window.WindowConfig):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.root_object = BereshitRenderer.root_object  # 👈 assign it here
-        self.camera_obj = self.root_object.search_by_component("camera")
+        self.camera_obj = self.root_object.search_by_component('Camera')
         if not self.camera_obj:
             raise Exception("No camera object found")
 
-        cam = self.camera_obj.camera
-        self.fov = cam.FOV
-        self.viewer_distance = cam.VIEWER_DISTANCE
+        self.cam = self.camera_obj.Camera
+        self.fov = self.cam.FOV
+        self.viewer_distance = self.cam.VIEWER_DISTANCE
 
         self.prog = self.ctx.program(
             vertex_shader='''
@@ -55,18 +55,18 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.prepare_meshes()
 
     def prepare_meshes(self):
-        shading = self.camera_obj.camera.shading
+        shading = self.cam.shading
         if shading == "wire":
             for obj in [self.root_object] + self.root_object.get_all_children_bereshit():
-                if obj.mesh is None:
+                if obj.Mesh is None or obj.Mesh.vertices == []:
                     continue
 
                 # Convert vertices to numpy
                 verts = [(v * obj.size * 0.5).to_np() for v in
-                         obj.mesh.vertices]  # Ensure this returns list or np.array of floats
+                         obj.Mesh.vertices]  # Ensure this returns list or np.array of floats
 
                 lines = []
-                for i, j in obj.mesh.edges:
+                for i, j in obj.Mesh.edges:
                     lines.extend(verts[i])  # 👈 flatten the vector into x, y, z
                     lines.extend(verts[j])
 
@@ -83,15 +83,15 @@ class BereshitRenderer(moderngl_window.WindowConfig):
                 })
         if shading == "solid":
             for obj in [self.root_object] + self.root_object.get_all_children_bereshit():
-                if obj.mesh is None:
+                if obj.Mesh is None:
                     continue
 
                 # Convert vertices to numpy (scaled and centered)
-                verts = [(v * obj.size * 0.5).to_np() for v in obj.mesh.vertices]
+                verts = [(v * obj.size * 0.5).to_np() for v in obj.Mesh.vertices]
 
                 # Build triangle vertex list
                 triangles = []
-                for tri in obj.mesh.triangles:  # tri = (i, j, k)
+                for tri in obj.Mesh.triangles:  # tri = (i, j, k)
                     for index in tri:
                         triangles.extend(verts[index])  # flatten x, y, z into list
 
@@ -108,7 +108,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
                     'len': len(triangles),
                 })
     def on_render(self, time: float, frametime: float):
-        shading = self.camera_obj.camera.shading
+        shading = self.cam.shading
 
         self.ctx.clear(0.0, 0.0, 0.0)
 
@@ -145,11 +145,11 @@ class BereshitRenderer(moderngl_window.WindowConfig):
             obj_rot_matrix = Matrix44.from_quaternion(pyrr_obj_q)
 
             model = (
-                    Matrix44.from_translation(pos)
-                    @ Matrix44.from_quaternion(PyrrQuat([rot.x, rot.y, rot.z, rot.w]))
-                   # @ Matrix44.from_scale(size)
-            )
 
+                    Matrix44.from_quaternion(PyrrQuat([rot.x, rot.y, rot.z, rot.w]))
+                    @ Matrix44.from_translation(pos)
+            )
+            # @ Matrix44.from_scale(size)
             self.prog['model'].write(model.astype('f4').tobytes())
             self.prog['view'].write(self.view.astype('f4').tobytes())
             self.prog['projection'].write(self.projection.astype('f4').tobytes())

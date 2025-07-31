@@ -51,7 +51,7 @@ hip = Object(position=(0, 3.5/2, 6), size=(38.2, 3.5, 3.8), children=[])  # prev
 hip.add_component("rigidbody", Rigidbody(useGravity=True))
 hip.add_component("collider", BoxCollider())
 
-# hip.add_component("joint", FixJoint(other_object=leg_left))
+hip.add_component("joint", FixJoint(other_object=leg_left))
 
 ground = Object(position=(0, -64, 0), size=(20, 1, 20))
 ground.add_component("rigidbody", Rigidbody(isKinematic=True))
