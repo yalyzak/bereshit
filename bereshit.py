@@ -819,48 +819,6 @@ class BoxCollider:
         for component in self.parent.components.values():
             if hasattr(component, 'OnTriggerEnter') and component.OnTriggerEnter is not None and component != self:
                 component.OnTriggerEnter(other_collider)
-    def Positional_correction(self, other):
-        min_max_a_list = self.get_bounds()
-        min_max_b_list = other.get_bounds()
-
-        smallest_translation = None
-        smallest_distance = float('inf')
-
-        for min_a, max_a in min_max_a_list:
-            for min_b, max_b in min_max_b_list:
-                dx = min(max_a.x, max_b.x) - max(min_a.x, min_b.x)
-                dy = min(max_a.y, max_b.y) - max(min_a.y, min_b.y)
-                dz = min(max_a.z, max_b.z) - max(min_a.z, min_b.z)
-
-                if dx > 0 and dy > 0 and dz > 0:
-                    # For each axis, check both direction signs
-                    candidates = [
-                        Vector3(dx, 0, 0),
-                        Vector3(-dx, 0, 0),
-                        Vector3(0, dy, 0),
-                        Vector3(0, -dy, 0),
-                        Vector3(0, 0, dz),
-                        Vector3(0, 0, -dz),
-                    ]
-
-                    for v in candidates:
-                        moved_a_min = min_a + v
-                        moved_a_max = max_a + v
-
-                        if not (
-                                moved_a_max.x < min_b.x or moved_a_min.x > max_b.x or
-                                moved_a_max.y < min_b.y or moved_a_min.y > max_b.y or
-                                moved_a_max.z < min_b.z or moved_a_min.z > max_b.z
-                        ):
-                            continue  # Still overlapping in this direction
-
-                        distance = v.magnitude()
-                        if distance < smallest_distance:
-                            smallest_translation = v
-                            smallest_distance = distance
-
-        if smallest_translation:
-            self.obj.position += smallest_translation
 
     def get_bounds(self):
         # Get 8 corners in local space
@@ -895,11 +853,109 @@ class BoxCollider:
 
 
     def check_collision(self, other):
+
         other_collider = getattr(other, 'collider', other)
         if other_collider is None:
             return None
-
         # --- Internal Functions ---
+        def generate_face_to_face_contact(ref_center, ref_axes, ref_half, inc_center, inc_axes, inc_half, normal_axis,
+                                          collision_normal, penetration_depth):
+            def get_face_corners(center, axes, half_sizes, normal_axis):
+                u, v = [i for i in range(3) if i != normal_axis]
+                corners = []
+                for i in [-1, 1]:
+                    for j in [-1, 1]:
+                        corner = center + axes[u] * half_sizes[u] * i + axes[v] * half_sizes[v] * j
+                        corners.append(corner)
+                return corners
+
+            def clip_polygon_against_plane(polygon, plane_point, plane_normal):
+                clipped = []
+                for i in range(len(polygon)):
+                    A = polygon[i]
+                    B = polygon[(i + 1) % len(polygon)]
+                    dA = (A - plane_point).dot(plane_normal)
+                    dB = (B - plane_point).dot(plane_normal)
+
+                    if dA >= 0:  # A is inside
+                        if dB >= 0:  # B is also inside
+                            clipped.append(B)
+                        else:  # B is outside, clip B
+                            t = dA / (dA - dB)
+                            clipped.append(A + (B - A) * t)
+                    elif dB >= 0:
+                        t = dA / (dA - dB)
+                        clipped.append(A + (B - A) * t)
+                        clipped.append(B)
+                return clipped
+
+            sign = -1 if ref_axes[normal_axis].dot(collision_normal) > 0 else 1
+            ref_face_center = ref_center + ref_axes[normal_axis] * ref_half[normal_axis] * sign # floor
+            incident_axis = max(range(3), key=lambda i: abs(ref_axes[normal_axis].dot(inc_axes[i])))
+            incident_face_center = inc_center - inc_axes[incident_axis] * inc_half[incident_axis] * -sign
+            incident_face = get_face_corners(incident_face_center, inc_axes, inc_half, incident_axis) # obj
+
+            # Clip incident polygon against reference face side planes
+            side_axes = [i for i in range(3) if i != normal_axis]
+            planes = []
+            for i in side_axes:
+                edge_dir = ref_axes[i]
+                plane_point = ref_face_center + edge_dir * ref_half[i]
+                planes.append((plane_point, -edge_dir))
+                plane_point = ref_face_center - edge_dir * ref_half[i]
+                planes.append((plane_point, edge_dir))
+
+            clipped = incident_face
+            clipped2 = set()
+            for point, normal in planes:
+                clipped = clip_polygon_against_plane(clipped, point, normal)
+                clipped2.add(clipped[0])
+                if not clipped:
+                    return []
+
+            # Filter points below the face
+            final_points = []
+            for p in clipped:
+                depth = (p - ref_face_center).dot(ref_axes[normal_axis])
+                if depth >= 0:
+                    final_points.append((p, -collision_normal, depth))
+
+            return final_points
+
+        def generate_edge_to_edge_contact(a_center, a_axes, a_half, b_center, b_axes, b_half, i, j, collision_axis,
+                                          penetration):
+            p1 = a_center + a_axes[i] * a_half[i]
+            p2 = a_center - a_axes[i] * a_half[i]
+            q1 = b_center + b_axes[j] * b_half[j]
+            q2 = b_center - b_axes[j] * b_half[j]
+
+            # Closest point between two line segments
+            def closest_point_between_segments(p1, p2, q1, q2):
+                d1 = p2 - p1
+                d2 = q2 - q1
+                r = p1 - q1
+                a = d1.dot(d1)
+                e = d2.dot(d2)
+                f = d2.dot(r)
+                b = d1.dot(d2)
+                c = d1.dot(r)
+
+                denom = a * e - b * b
+                if denom == 0:
+                    return (p1 + p2 + q1 + q2) * 0.25  # Fallback: midpoint of both edges
+
+                s = (b * f - c * e) / denom
+                t = (a * f - b * c) / denom
+
+                s = max(0, min(1, s))
+                t = max(0, min(1, t))
+
+                closest_a = p1 + d1 * s
+                closest_b = q1 + d2 * t
+                return (closest_a + closest_b) * 0.5
+
+            pt = closest_point_between_segments(p1, p2, q1, q2)
+            return [(pt, collision_axis, penetration)]
 
         def get_axes(rotation):
             R = get_rotation_matrix(rotation)
@@ -932,55 +988,102 @@ class BoxCollider:
         a_half = self.obj.size * 0.5
         b_half = other_collider.obj.size * 0.5
 
-        # bounding_radius_a = a_half.magnitude()
-        # bounding_radius_b = b_half.magnitude()
-        # center_distance = (b_center - a_center).magnitude()
-        # if center_distance > bounding_radius_a + bounding_radius_b:
-        #     return None
-
         a_half_sizes = [a_half.x, a_half.y, a_half.z]
         b_half_sizes = [b_half.x, b_half.y, b_half.z]
 
         axes_to_test = []
 
         # Add 3 axes of A
-        axes_to_test.extend(a_axes)
+        for i in range(3):
+            axes_to_test.append(("a", i, a_axes[i]))
 
         # Add 3 axes of B
-        axes_to_test.extend(b_axes)
+        for i in range(3):
+            axes_to_test.append(("b", i, b_axes[i]))
 
         # Add 9 cross-product axes
         for i in range(3):
             for j in range(3):
                 cross = a_axes[i].cross(b_axes[j])
-                if cross.magnitude() > 1e-6:  # avoid zero/near-zero axes
-                    axes_to_test.append(cross.normalized())
+                if cross.magnitude() > 1e-6:
+                    axes_to_test.append(("edge", (i, j), cross.normalized()))
 
         smallest_overlap = float('inf')
         collision_axis = None
 
-        for axis in axes_to_test:
+        for axis_info in axes_to_test:
+            source, indices, axis = axis_info
             proj_a = project_box(a_center, a_axes, a_half_sizes, axis)
             proj_b = project_box(b_center, b_axes, b_half_sizes, axis)
 
-
-                # if self.enter:
-                #     self.OnCollisionExit(other_collider)
             if not overlap_on_axis(proj_a, proj_b):
-                return None  # Separating axis found → no collision
+                return None  # Separating axis found
 
             overlap = min(proj_a[1], proj_b[1]) - max(proj_a[0], proj_b[0])
             if overlap < smallest_overlap:
                 smallest_overlap = overlap
                 collision_axis = axis
+                collision_axis2 = collision_axis
+                if (b_center - a_center).dot(collision_axis) < 0:
+                    collision_axis2 = -collision_axis
+                collision_type = source
+                collision_axis_indices = indices
+        # if (b_center-a_center).dot(collision_axis2) > 0:
+        #     collision_type = "b"
+        # elif (a_center-b_center).dot(collision_axis2) > 0:
+        #     collision_type = "b"
+        if collision_type in ("a", "b"):
+            if collision_type == "a":
+                ref_center, ref_axes, ref_half = a_center, a_axes, a_half_sizes
+                inc_center, inc_axes, inc_half = b_center, b_axes, b_half_sizes
+            else:
+                ref_center, ref_axes, ref_half = b_center, b_axes, b_half_sizes
+                inc_center, inc_axes, inc_half = a_center, a_axes, a_half_sizes
+
+            normal_axis = collision_axis_indices
+
+            contact_points = generate_face_to_face_contact(
+                ref_center, ref_axes, ref_half,
+                inc_center, inc_axes, inc_half,
+                normal_axis, collision_axis2, smallest_overlap
+            )
+
+            def average_contact_data(contact_points):
+                if not contact_points:
+                    return None  # or raise Exception
+
+                total_p = Vector3(0, 0, 0)
+                total_n = Vector3(0, 0, 0)
+                total_d = 0.0
+
+                for p, n, d in contact_points:
+                    total_p += p
+                    total_n += n
+                    total_d += d
+
+                count = len(contact_points)
+                avg_p = total_p / count
+                avg_n = total_n.normalized()  # normalize the summed normal vector
+                avg_d = total_d / count
+
+                return avg_p, avg_n, avg_d
+            contact_points = average_contact_data(contact_points)
+        # elif collision_type == "edge":
+        #     i, j = collision_axis_indices
+        #     contact_points = generate_edge_to_edge_contact(
+        #         a_center, a_axes, a_half_sizes,
+        #         b_center, b_axes, b_half_sizes,
+        #         i, j, collision_axis, smallest_overlap
+        #     )
 
         # Estimate contact point and normal
         contact_point = (a_center + b_center) * 0.5
         normal = collision_axis.normalized()
-
+        smallest_overlap = smallest_overlap
+        contact_point, normal, smallest_overlap = contact_points
         # Ensure the normal points from B to A
-        if (a_center - b_center).dot(normal) < 0:
-            normal = normal * -1
+        # if (a_center - b_center).dot(normal) < 0:
+        #     normal = normal * -1
 
         if self.is_trigger:
             self.OnTriggerEnter(other_collider)
@@ -996,6 +1099,9 @@ class BoxCollider:
             other_collider.OnCollisionEnter(self)
         else:
             other_collider.OnCollisionStay(self)
+
+
+
         return contact_point, normal, smallest_overlap
 
     def attach(self, owner_object):
@@ -1697,7 +1803,6 @@ class Object:
             J = impulses[i]
             if contact["v_norm"] > 0:
                 continue
-            print(f"[DEBUG] v_norm = {contact['v_norm']:.5f}, J = {J:.5f}")
 
             if contact["rb1"] and contact["rb2"]:
                 if not contact["rb1"].isKinematic and not contact["rb2"].isKinematic: # contact["rb1"].parent.name == "obj" and contact["rb2"].parent.name == "obj2"
