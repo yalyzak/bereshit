@@ -1,16 +1,16 @@
 import math
 import time
-
 import moderngl
 import numpy as np
 from dataclasses import dataclass
-import statistics
+# import statistics
 import copy
-import PPO
+# import PPO
 import send
 from math import sqrt
 import trimesh
 import open3d as o3d
+
 dt = 1/60
 
 @dataclass
@@ -859,7 +859,7 @@ class BoxCollider:
             return None
         # --- Internal Functions ---
         def generate_face_to_face_contact(ref_center, ref_axes, ref_half, inc_center, inc_axes, inc_half, normal_axis,
-                                          collision_normal, penetration_depth):
+                                          collision_normal, penetration_depth,self):
             def get_face_corners(center, axes, half_sizes, normal_axis):
                 u, v = [i for i in range(3) if i != normal_axis]
                 corners = []
@@ -894,7 +894,7 @@ class BoxCollider:
             incident_axis = max(range(3), key=lambda i: abs(ref_axes[normal_axis].dot(inc_axes[i])))
             incident_face_center = inc_center - inc_axes[incident_axis] * inc_half[incident_axis] * -sign
             incident_face = get_face_corners(incident_face_center, inc_axes, inc_half, incident_axis) # obj
-
+            objs = [Object(position=incident_face[i]) for i in range(len(incident_face))]
             # Clip incident polygon against reference face side planes
             side_axes = [i for i in range(3) if i != normal_axis]
             planes = []
@@ -1045,7 +1045,7 @@ class BoxCollider:
             contact_points = generate_face_to_face_contact(
                 ref_center, ref_axes, ref_half,
                 inc_center, inc_axes, inc_half,
-                normal_axis, collision_axis2, smallest_overlap
+                normal_axis, collision_axis2, smallest_overlap,self
             )
 
             def average_contact_data(contact_points):
@@ -1456,6 +1456,8 @@ class Object:
         #         comp.obj = obj_copy
 
         return obj_copy
+
+    def add_child(self, component, name=None):
 
     def add_component(self, component, name=None):
         if name is None:
