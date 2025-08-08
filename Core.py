@@ -1,17 +1,24 @@
 import asyncio
+import copy
 import threading
 import time
 
-import bereshit
-import render as render
 
+import render as render
+from bereshit import Object
 # import old_render as render
 
 
-def run(world,speed=1):
+def run(scene,speed=1,gizmos=False):
     TARGET_FPS = 60
     # bereshit.dt = TARGET_FPS * 0.000165
-
+    if gizmos:
+        point = Object(position=(0, 0, 0), size=(.1, .1, .1))
+        hit_point_gizmos = [Object(position=(0, 0, 0), size=(.1, .1, .1),children=[Object(position=(0, 0, 0), size=(.1, .1, .1)) for i in range(8)]) for i in scene.get_all_colliders()]
+        gizmos_container = Object(position=(0, 0, 0), size=(0, 0, 0), children=hit_point_gizmos, name='gizmos_container')
+        world = Object(position=(0, 0, 0), size=(0, 0, 0), children=[scene,gizmos_container], name='world')
+    else:
+        world = Object(position=(0, 0, 0), size=(0, 0, 0), children=[scene], name='world')
     dt = 1 / 60
 
     startg = time.time()
@@ -28,10 +35,10 @@ def run(world,speed=1):
             simulated_time = steps * dt
 
             if steps % 10 == 0:
-                world.update(dt, chack=True)
+                world.update(dt, chack=True,gizmos=gizmos)
             else:
                 # Update simulation
-                world.update(dt)
+                world.update(dt,gizmos=gizmos)
             # Compute when, in wall clock time, this simulated time should happen
             # For double speed: simulated_time advances twice as fast as real time
             target_wall_time = start_wall_time + (simulated_time / speed)

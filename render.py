@@ -7,6 +7,8 @@ from bereshit import Vector3, rotate_vector_old
 
 
 
+
+
 class BereshitRenderer(moderngl_window.WindowConfig):
     gl_version = (3, 3)
     title = "Bereshit moderngl Renderer"
@@ -26,7 +28,41 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.cam = self.camera_obj.Camera
         self.fov = self.cam.FOV
         self.viewer_distance = self.cam.VIEWER_DISTANCE
+        self.ortho_projection = Matrix44.orthogonal_projection(
+            0, self.wnd.size[0], 0, self.wnd.size[1], -1.0, 1.0
+        )
+        self.ui_vbo = self.ctx.buffer(reserve=20 * 6 * 64)  # ~64 quads
 
+        # Simple UI shader
+        self.ui_prog = self.ctx.program(
+            vertex_shader="""
+                #version 330
+                in vec2 in_position;
+                in vec3 in_color;
+                uniform mat4 ortho;
+                out vec3 v_color;
+                void main() {
+                    gl_Position = ortho * vec4(in_position, 0.0, 1.0);
+                    v_color = in_color;
+                }
+            """,
+            fragment_shader="""
+                #version 330
+                in vec3 v_color;
+                out vec4 fragColor;
+                void main() {
+                    fragColor = vec4(v_color, 1.0);
+                }
+            """
+        )
+        self.ui_vao = self.ctx.vertex_array(
+            self.ui_prog,
+            [(self.ui_vbo, "2f 3f", "in_position", "in_color")]
+        )
+
+
+        # Store UI elements to draw
+        self.ui_elements = []
         self.prog = self.ctx.program(
             vertex_shader='''
             #version 330
@@ -62,8 +98,9 @@ class BereshitRenderer(moderngl_window.WindowConfig):
                     continue
 
                 # Convert vertices to numpy
-                verts = [(v * obj.size * 0.5).to_np() for v in
-                         obj.Mesh.vertices]  # Ensure this returns list or np.array of floats
+                # verts = [(v * obj.size * 0.5).to_np() for v in
+                #          obj.Mesh.vertices]  # Ensure this returns list or np.array of floats
+                verts = [v.to_np() for v in obj.Mesh.vertices]  # no size, no 0.5
 
                 lines = []
                 for i, j in obj.Mesh.edges:
@@ -107,10 +144,134 @@ class BereshitRenderer(moderngl_window.WindowConfig):
                     ),
                     'len': len(triangles),
                 })
+
+    def prepare_mesh_for_object(self, obj):
+        """Build a mesh for a single object (based on current shading) and add/replace it in self.meshes."""
+        shading = getattr(self.cam, "shading", "wire")
+
+        # Basic sanity checks
+        if obj is None or getattr(obj, "Mesh", None) is None:
+            return None
+
+        # Convert vertices to numpy (scaled and centered)
+        verts = getattr(obj.Mesh, "vertices", None)
+        if not verts:  # empty list or None
+            return None
+
+        scaled = [(v * obj.size * 0.5).to_np() for v in verts]  # each -> np.array([x,y,z], dtype=float)
+
+        mesh_record = None
+        if shading == "wire":
+            edges = getattr(obj.Mesh, "edges", None)
+            if not edges:
+                return None
+
+            flat = []
+            for i, j in edges:
+                flat.extend(scaled[i])  # x,y,z for vertex i
+                flat.extend(scaled[j])  # x,y,z for vertex j
+
+            vbo = np.array(flat, dtype="f4")
+            buf = self.ctx.buffer(vbo.tobytes())
+
+            mesh_record = {
+                "obj": obj,
+                "vbo": buf,
+                "vao": self.ctx.vertex_array(
+                    self.prog,
+                    [(buf, "3f", "in_position")],
+                ),
+                "len": len(flat),  # number of floats (== 3 * vertex_count)
+                "mode": moderngl.LINES if hasattr(moderngl, "LINES") else None,
+            }
+
+        elif shading == "solid":
+            triangles = getattr(obj.Mesh, "triangles", None)
+            if not triangles:
+                return None
+
+            flat = []
+            for tri in triangles:  # tri is a tuple/list of 3 indices
+                for idx in tri:
+                    flat.extend(scaled[idx])  # x,y,z
+
+            vbo = np.array(flat, dtype="f4")
+            buf = self.ctx.buffer(vbo.tobytes())
+
+            mesh_record = {
+                "obj": obj,
+                "vbo": buf,
+                "vao": self.ctx.vertex_array(
+                    self.prog,
+                    [(buf, "3f", "in_position")],
+                ),
+                "len": len(flat),  # number of floats (== 3 * vertex_count)
+                "mode": moderngl.TRIANGLES if hasattr(moderngl, "TRIANGLES") else None,
+            }
+
+        else:
+            return None  # unknown shading
+
+        # Replace existing mesh for this object if it exists (avoid duplicates)
+        for i, rec in enumerate(self.meshes):
+            if rec.get("obj") is obj:
+                # Delete GPU buffers for the old record if desired:
+                try:
+                    rec["vbo"].release()
+                    rec["vao"].release()
+                except Exception:
+                    pass
+                self.meshes[i] = mesh_record
+                return mesh_record
+
+        # Otherwise append
+        self.meshes.append(mesh_record)
+        return mesh_record
+
+    def resize(self, width: int, height: int):
+        self.projection = Matrix44.perspective_projection(self.fov, self.wnd.aspect_ratio, 0.1, 1000.0)
+        self.ortho_projection = Matrix44.orthogonal_projection(0, width, 0, height, -1.0, 1.0)
+
+    def render_ui(self):
+        if not self.ui_elements:
+            return
+        self.ctx.disable(moderngl.DEPTH_TEST)
+        # self.ctx.disable(moderngl.CULL_FACE)  # if you enabled it elsewhere
+        self.ctx.enable(moderngl.BLEND)
+
+        all_vertices = np.concatenate(self.ui_elements).astype('f4', copy=False)
+        self.ui_vbo.orphan(all_vertices.nbytes)
+        self.ui_vbo.write(all_vertices)
+
+        self.ui_prog["ortho"].write(self.ortho_projection.astype("f4").tobytes())
+
+        vertex_count = all_vertices.size // 5
+        self.ui_vao.render(mode=moderngl.TRIANGLES, vertices=vertex_count)
+
+        self.ui_elements.clear()
+        self.ctx.enable(moderngl.DEPTH_TEST)
+
+    def add_ui_rect(self, x, y, w, h, color=(1.0, 1.0, 1.0)):
+        r, g, b = color
+        # Triangle-based quad
+        vertices = np.array([
+            x, y, r, g, b,
+            x + w, y, r, g, b,
+            x + w, y + h, r, g, b,
+
+            x, y, r, g, b,
+            x + w, y + h, r, g, b,
+            x, y + h, r, g, b,
+        ], dtype="f4")
+        self.ui_elements.append(vertices)
+
     def on_render(self, time: float, frametime: float):
+
         shading = self.cam.shading
 
         self.ctx.clear(0.0, 0.0, 0.0)
+
+
 
         cam_pos = self.camera_obj.position.to_np()
         cam_rot = self.camera_obj.quaternion
@@ -145,8 +306,8 @@ class BereshitRenderer(moderngl_window.WindowConfig):
             obj_rot_matrix = Matrix44.from_quaternion(pyrr_obj_q)
 
             model = (
-
-                    Matrix44.from_quaternion(PyrrQuat([rot.x, rot.y, rot.z, rot.w]))
+                    Matrix44.from_scale(size * 0.5)
+                    @ Matrix44.from_quaternion(PyrrQuat([rot.x, rot.y, rot.z, rot.w]))
                     @ Matrix44.from_translation(pos)
             )
             # @ Matrix44.from_scale(size)
@@ -160,7 +321,18 @@ class BereshitRenderer(moderngl_window.WindowConfig):
                 item['vao'].render(mode=moderngl.LINES, vertices=item['len'])
             elif shading == "solid":
                 item['vao'].render(mode=moderngl.TRIANGLES, vertices=item['len'] // 3)
+                # Big red box (covering most of the screen)
+        # Desired rectangle size
+        rect_width = 400
+        rect_height = 300
 
+        # Center position
+        x = (self.window_size[0] - rect_width) / 2
+        y = (self.window_size[1] - rect_height) / 2
+        # self.add_ui_rect(x, y, rect_width, rect_height, color=(1.0, 0.0, 0.0))
+
+        # --- Render UI on top ---
+        self.render_ui()
 
 def run_renderer(root_object):
     BereshitRenderer.root_object = root_object  # 👈 inject your object here

@@ -1021,7 +1021,7 @@ class BoxCollider:
 
        smallest_overlap = float('inf')
        collision_axis = None
-
+       contact_points = None
        for axis_info in axes_to_test:
            source, indices, axis = axis_info
            proj_a = project_box(a_center, a_axes, a_half_sizes, axis)
@@ -1031,14 +1031,17 @@ class BoxCollider:
                return None  # Separating axis found
 
            overlap = min(proj_a[1], proj_b[1]) - max(proj_a[0], proj_b[0])
-           if overlap < smallest_overlap:
+           if overlap < smallest_overlap :# or (overlap == smallest_overlap and source != 'edge')
                smallest_overlap = overlap
                collision_axis = axis
-               collision_axis2 = collision_axis
-               if (b_center - a_center).dot(collision_axis) < 0:
-                   collision_axis2 = -collision_axis
                collision_type = source
                collision_axis_indices = indices
+           elif overlap == smallest_overlap and source != 'edge':
+               if (b_center - a_center).dot(collision_axis) > 0:
+                   # collision_axis = -collision_axis
+                    collision_type = 'a' if source == 'b' else 'b'
+               else:
+                   collision_type = source
        # if (b_center-a_center).dot(collision_axis2) > 0:
        #     collision_type = "b"
        # elif (a_center-b_center).dot(collision_axis2) > 0:
@@ -1058,30 +1061,31 @@ class BoxCollider:
            contact_points, ref_face_center, incident_face = generate_face_to_face_contact(
                ref_center, ref_axes, ref_half,
                inc_center, inc_axes, inc_half,
-               normal_axis, collision_axis2, smallest_overlap, self
+               normal_axis, collision_axis, smallest_overlap, self
            )
+       else:
+           return None
+       def average_contact_data(contact_points):
+           if not contact_points:
+               return None  # or raise Exception
 
-           def average_contact_data(contact_points):
-               if not contact_points:
-                   return None  # or raise Exception
+           total_p = Vector3(0, 0, 0)
+           total_n = Vector3(0, 0, 0)
+           total_d = 0.0
 
-               total_p = Vector3(0, 0, 0)
-               total_n = Vector3(0, 0, 0)
-               total_d = 0.0
+           for p, n, d in contact_points:
+               total_p += p
+               total_n += n
+               total_d += d
 
-               for p, n, d in contact_points:
-                   total_p += p
-                   total_n += n
-                   total_d += d
+           count = len(contact_points)
+           avg_p = total_p / count
+           avg_n = total_n.normalized()  # normalize the summed normal vector
+           avg_d = total_d / count
 
-               count = len(contact_points)
-               avg_p = total_p / count
-               avg_n = total_n.normalized()  # normalize the summed normal vector
-               avg_d = total_d / count
+           return avg_p, avg_n, avg_d
 
-               return avg_p, avg_n, avg_d
-
-           contact_points = average_contact_data(contact_points)
+       contact_points = average_contact_data(contact_points)
        # elif collision_type == "edge":
        #     i, j = collision_axis_indices
        #     contact_points = generate_edge_to_edge_contact(
@@ -1093,7 +1097,7 @@ class BoxCollider:
        # Estimate contact point and normal
        contact_point = (a_center + b_center) * 0.5
        normal = collision_axis.normalized()
-       smallest_overlap = smallest_overlap
+       # smallest_overlap = smallest_overlap
        # contact_point, normal, smallest_overlap = contact_points
        contact_point = contact_points[0] if contact_points is not None else contact_point
 

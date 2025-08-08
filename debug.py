@@ -1,5 +1,6 @@
 import time
 
+import bereshit
 from bereshit import Quaternion,Vector3,Mesh_rander,rotate_vector_old,rotate_vector_quaternion
 import  mouse
 
@@ -37,8 +38,16 @@ class debug:
     #
     #     # 4. Optionally rotate the object itself (e.g., to face same direction)
     #     self.parent.quaternion = rotation * self.parent.quaternion  # Global rotation
-    def Update(self):
-        self.change()
+    def des(self):
+        # self.parent = bereshit.Object()
+        self.parent.world.add_child(bereshit.Object(size=(10,10,10),name="äsd"))
+        # self.parent.world.children.append(bereshit.Object(size=(10,10,10)))
+        print(self.parent.world.children)
+    # def Update(self):
+        # print(self.parent.world.children)
+        # self.parent.size *= 1.001
+
+        # self.change()
         # self.s()
         # 1. Compute relative position from pivot to object
 
@@ -47,8 +56,9 @@ class debug:
 
     # #
     def Start(self):
-        self.parent.Rigidbody.angular_velocity += Vector3(3,1,10)
+    #     # self.parent.Rigidbody.angular_velocity += Vector3(3,1,10)
+    #     self.des()
 
     #     self.parent.quaternion *= Quaternion.euler(Vector3(0,0,30))
         # print(self.parent.rotation)
-        self.parent.Rigidbody.velocity += Vector3(3,1,5)
+        self.parent.Rigidbody.velocity += Vector3(0,0,2)

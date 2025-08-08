@@ -5,7 +5,7 @@ from CamController import CamController
 from debug import debug
 
 
-obj_small = Object(position=(0, 0,    0), size=(1, 1, 1),rotation=(0,0,60),name='obj_small')
+obj_small = Object(position=(0, 0,    0), size=(1, 1, 1),rotation=(0,0,10),name='obj_small')
 obj_big = Object(position=(0, 3,    0), size=(1, 1, 1),rotation=(0,0,0),name='obj_big')
 
 joint = Object(position=(0, 5,    0), size=(1, 1, 1),name='joint')
@@ -26,7 +26,7 @@ camera = Object(size=(1,1,1),position=(0,0,-5),name='camera')
 camera.add_component(Camera())
 camera.add_component(Mesh_rander(shape="empty"))
 
-# camera.add_component(rotate())
+camera.add_component(rotate())
 camera.add_component(CamController())
 camera.add_component(Rigidbody(isKinematic=True))
 camera.add_component(BoxCollider())
@@ -44,9 +44,11 @@ floor.add_component(BoxCollider())
 scene = Object(
     position=Vector3(0, 0, 0),
     size=(0, 0, 0),
-    # children=[obj_small,floor,camera,obj_big],
+    children=[obj_small,floor,camera,obj_big],
+    # children=[obj_big,obj_small, floor, camera],
+
     # children=[floor, obj_small,camera],
-    children=[obj_small,floor, camera],
+    # children=[obj_small,floor, camera],
 
     name="scene"
 )
