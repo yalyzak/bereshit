@@ -10,7 +10,7 @@ import send
 from math import sqrt
 import trimesh
 import open3d as o3d
-import render as render
+
 dt = 1/60
 
 @dataclass
@@ -966,7 +966,7 @@ class BoxCollider:
            return [(pt, collision_axis, penetration)]
 
        def get_axes(rotation):
-           R = get_rotation_matrix(rotation)
+           R = get_rotation_matrix_from_quaternion(rotation)
 
            right_v = R @ np.array([1, 0, 0])
            up_v = R @ np.array([0, 1, 0])
@@ -993,8 +993,8 @@ class BoxCollider:
        a_center = self.obj.position
        b_center = other_collider.obj.position
 
-       a_axes = get_axes(self.obj.rotation)
-       b_axes = get_axes(other_collider.obj.rotation)
+       a_axes = get_axes(self.obj.quaternion.conjugate())
+       b_axes = get_axes(other_collider.obj.quaternion.conjugate())
 
        a_half = self.obj.size * 0.5
        b_half = other_collider.obj.size * 0.5
@@ -1042,21 +1042,22 @@ class BoxCollider:
                     collision_type = 'a' if source == 'b' else 'b'
                else:
                    collision_type = source
-       # if (b_center-a_center).dot(collision_axis2) > 0:
-       #     collision_type = "b"
-       # elif (a_center-b_center).dot(collision_axis2) > 0:
-       #     collision_type = "b"
+
        if collision_type in ("a", "b"):
            if collision_type == "a":
                ref = (other_collider.parent.Rigidbody, self.parent.Rigidbody)
                ref_center, ref_axes, ref_half = a_center, a_axes, a_half_sizes
                inc_center, inc_axes, inc_half = b_center, b_axes, b_half_sizes
+               normal_axis = collision_axis_indices
+
+
            else:
+               normal_axis = collision_axis_indices
                ref = (self.parent.Rigidbody, other_collider.parent.Rigidbody)
                ref_center, ref_axes, ref_half = b_center, b_axes, b_half_sizes
                inc_center, inc_axes, inc_half = a_center, a_axes, a_half_sizes
 
-           normal_axis = collision_axis_indices
+
 
            contact_points, ref_face_center, incident_face = generate_face_to_face_contact(
                ref_center, ref_axes, ref_half,
@@ -1086,13 +1087,6 @@ class BoxCollider:
            return avg_p, avg_n, avg_d
 
        contact_points = average_contact_data(contact_points)
-       # elif collision_type == "edge":
-       #     i, j = collision_axis_indices
-       #     contact_points = generate_edge_to_edge_contact(
-       #         a_center, a_axes, a_half_sizes,
-       #         b_center, b_axes, b_half_sizes,
-       #         i, j, collision_axis, smallest_overlap
-       #     )
 
        # Estimate contact point and normal
        contact_point = (a_center + b_center) * 0.5
@@ -2597,7 +2591,24 @@ def get_rotation_matrix(angles):
    # Same convention: X, then Y, then Z
    R = R_z @ R_y @ R_x
    return R
+def get_rotation_matrix_from_quaternion(q):
+    q.normalized()
+    x, y, z, w = q.x, q.y, q.z, q.w
 
+    # Normalize the quaternion to ensure it's a unit quaternion
+    norm = np.sqrt(x * x + y * y + z * z + w * w)
+    x /= norm
+    y /= norm
+    z /= norm
+    w /= norm
+    # Rotation matrix from unit quaternion
+    R = np.array([
+        [1 - 2 * (y**2 + z**2),     2 * (x*y - z*w),         2 * (x*z + y*w)],
+        [2 * (x*y + z*w),           1 - 2 * (x**2 + z**2),   2 * (y*z - x*w)],
+        [2 * (x*z - y*w),           2 * (y*z + x*w),         1 - 2 * (x**2 + y**2)]
+    ])
+
+    return R
 def rotate_vector_old(vector, pivot, angles):
    vector = np.array([vector.x, vector.y, vector.z])
    pivot = np.array([pivot.x, pivot.y, pivot.z])
@@ -2714,4 +2725,3 @@ def direction_to_angles(v: Vector3):
 
    # No roll — direction vectors don’t contain roll info
    return Vector3(pitch, yaw, 0)  # (pitch, yaw, roll)
-
