@@ -1904,7 +1904,7 @@ class Object:
                     self.apply_friction_impulse(contact, n, J)
                 elif (not rb1.isKinematic) or (not rb2.isKinematic):
                     self.resolve_kinematic_collision(contact, J)
-                    self.apply_friction_impulse(contact, n, J)
+                    # self.apply_friction_impulse(contact, n, J)
 
         return contacts
 
@@ -2205,8 +2205,9 @@ class Object:
 
         elif rb2 and not rb2.isKinematic:
             rb2.velocity -= (impulse_vec / rb2.mass)
-            gravity = Vector3(0, -9.8, 0)
-            rb2.force -= gravity * rb2.mass
+            # gravity = Vector3(0, -9.8, 0)
+            # rb2.force -= gravity * rb2.mass
+            rb2.force = Vector3()
 
             # Angular impulse for rb2
             r2 = contact_point - rb2.position

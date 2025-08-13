@@ -16,7 +16,7 @@ eamty = Object(size=(5,1,1),name="op",position=(5,0,0))
 
 obj_small.add_component(debug())
 
-r = .75
+r = 0.01
 obj_small.add_component(Rigidbody(useGravity=True,velocity=Vector3(0,-1,0),restitution=r))
 obj_small.add_component(BoxCollider())
 
