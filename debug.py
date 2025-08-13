@@ -1,9 +1,10 @@
 import time
 
-import bereshit
+import numpy as np
+
 from bereshit import Quaternion,Vector3,Mesh_rander,rotate_vector_old,rotate_vector_quaternion
 import  mouse
-
+import math
 CENTER_X = 960
 CENTER_Y = 540
 class debug:
@@ -12,6 +13,8 @@ class debug:
         self.total_yaw = 0.0
         self.state = 0
         self.start_time = 0
+        self.max = Vector3()
+        self.t = 0
     def change(self):
         current_time = time.perf_counter()
 
@@ -38,16 +41,20 @@ class debug:
     #
     #     # 4. Optionally rotate the object itself (e.g., to face same direction)
     #     self.parent.quaternion = rotation * self.parent.quaternion  # Global rotation
-    def des(self):
-        # self.parent = bereshit.Object()
-        self.parent.world.add_child(bereshit.Object(size=(10,10,10),name="äsd"))
-        # self.parent.world.children.append(bereshit.Object(size=(10,10,10)))
-        print(self.parent.world.children)
-    # def Update(self):
-        # print(self.parent.world.children)
-        # self.parent.size *= 1.001
+    def onu(self):
+        if abs(self.parent.Rigidbody.velocity.y) < 0.1:
+            print(self.parent.position.y,self.t)
+        # if self.parent.position.y > self.max:
+        #     self.max = self.parent.position.y
+        self.t += 1/60
+    def Update(self):
+        # self.onu()
+        e = 0.5 * self.parent.Rigidbody.mass * self.parent.Rigidbody.velocity.magnitude() ** 2 +self.parent.Rigidbody.mass * 9.8 * abs(self.parent.position.y)
+        # print(e,self.parent.position.y)
+        # print(e)
+        print(self.parent.Rigidbody.velocity)
 
-        # self.change()
+    #     self.change()
         # self.s()
         # 1. Compute relative position from pivot to object
 
@@ -55,10 +62,13 @@ class debug:
         # self.parent.quaternion *= Quaternion.euler(Vector3(0,0,0.01))
 
     # #
-    def Start(self):
-    #     # self.parent.Rigidbody.angular_velocity += Vector3(3,1,10)
-    #     self.des()
+    def ons(self):
+        self.max = self.parent.position.y
 
-    #     self.parent.quaternion *= Quaternion.euler(Vector3(0,0,30))
+    def Start(self):
+        self.ons()
+        # self.parent.Rigidbody.angular_velocity += Vector3(0,1,0)
+
+        # self.parent.quaternion *= Quaternion.euler(Vector3(0,0,30))
         # print(self.parent.rotation)
-        self.parent.Rigidbody.velocity += Vector3(0,0,2)
+        # self.parent.Rigidbody.velocity += Vector3(3,1,5)

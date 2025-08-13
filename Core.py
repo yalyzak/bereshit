@@ -1,29 +1,29 @@
 import asyncio
-import copy
 import threading
 import time
+from builtins import range
 
-
-import render as render
 from bereshit import Object
+import render as render
+
 # import old_render as render
 
 
-def run(scene,speed=1,gizmos=False):
+def run(scene,speed=100,gizmos=False,scriptRefreshRate=60):
     TARGET_FPS = 60
     # bereshit.dt = TARGET_FPS * 0.000165
-    if gizmos:
-        point = Object(position=(0, 0, 0), size=(.1, .1, .1))
-        hit_point_gizmos = [Object(position=(0, 0, 0), size=(.1, .1, .1),children=[Object(position=(0, 0, 0), size=(.1, .1, .1)) for i in range(8)]) for i in scene.get_all_colliders()]
-        gizmos_container = Object(position=(0, 0, 0), size=(0, 0, 0), children=hit_point_gizmos, name='gizmos_container')
-        world = Object(position=(0, 0, 0), size=(0, 0, 0), children=[scene,gizmos_container], name='world')
-    else:
-        world = Object(position=(0, 0, 0), size=(0, 0, 0), children=[scene], name='world')
+
     dt = 1 / 60
 
     startg = time.time()
     FPS = 1
+    if gizmos:
+        hit_points = [Object(size=(0.1,0.1,0.1),children=[Object(size=(0.1,0.1,0.1)) for i in range(8)]) for i in range(8)]
+        gizmos_container = Object(size=(0,0,0),children=hit_points)
+        world = Object(position=(0, 0, 0), size=(0, 0, 0), children=[scene,gizmos_container], name='world')
 
+    else:
+        world = Object(position=(0, 0, 0), size=(0, 0, 0), children=[scene], name='world')
     async def main_logic():
         start_wall_time = time.time()
         steps = 0
@@ -34,7 +34,7 @@ def run(scene,speed=1,gizmos=False):
             steps += 1
             simulated_time = steps * dt
 
-            if steps % 10 == 0:
+            if steps % scriptRefreshRate == 0:
                 world.update(dt, chack=True,gizmos=gizmos)
             else:
                 # Update simulation
