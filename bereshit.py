@@ -1,15 +1,14 @@
 import math
 import time
-import moderngl
 import numpy as np
 from dataclasses import dataclass
-# import statistics
 import copy
 # import PPO
 import send
 from math import sqrt
 import trimesh
 import open3d as o3d
+import moderngl
 
 dt = 1 / 60
 
@@ -328,6 +327,17 @@ class Quaternion:
 
 
 class Mesh_rander:
+    def __deepcopy__(self, memo):
+        obj_copy = type(self)(
+            vertices=copy.deepcopy(self.vertices, memo),
+            edges=copy.deepcopy(self.edges, memo),
+            shape=copy.deepcopy(self.shape, memo),
+            # ctx= moderngl.create_standalone_context()
+        )
+        memo[id(self)] = obj_copy
+
+
+        return obj_copy
     def attach(self, owner_object):
         return "Mesh"
 
@@ -612,6 +622,7 @@ class Size(Vector3):
 
 
 class MeshCollider:
+
     def __init__(self, vertices=None, object_pointer=None, is_trigger=False):
         self.vertices = copy.deepcopy(vertices) or []  # Local-space Vector3
         self.obj = object_pointer
@@ -949,7 +960,7 @@ class BoxCollider:
                 depth_offset = -(p - ref_face_center).dot(ref_axes[normal_axis])
                 depth = min(penetration_depth, depth_offset)
                 # depth = penetration_depth
-                if depth > 0:
+                if depth >= 0:
                     final_points.append((p, -collision_normal, depth))
 
             return final_points, gizmos
@@ -1126,8 +1137,8 @@ class BoxCollider:
         a_center = self.obj.position
         b_center = other_collider.obj.position
 
-        a_axes = get_axes(self.obj.quaternion.conjugate())
-        b_axes = get_axes(other_collider.obj.quaternion.conjugate())
+        a_axes = get_axes(self.obj.quaternion)
+        b_axes = get_axes(other_collider.obj.quaternion)
 
         a_half = self.obj.size * 0.5
         b_half = other_collider.obj.size * 0.5
@@ -1775,6 +1786,139 @@ class Object:
             self.Rigidbody.force += correction_self
             self.joint.other.Rigidbody.force += correction_other
 
+    # def Stage3(self, children, dt):
+    #     contacts = []
+    #
+    #     beta = 0.025  # softness factor for positional correction
+    #
+    #     # STEP 1: Collect all contacts (use ALL manifold points)
+    #     for i in range(len(children)):
+    #         obj1 = children[i]
+    #         rb11 = obj1.get_component("Rigidbody")
+    #
+    #         for j in range(i + 1, len(children)):
+    #             obj2 = children[j]
+    #             rb2 = obj2.get_component("Rigidbody")
+    #
+    #             # Skip if neither has a Rigidbody or both are kinematic
+    #             if (rb11 is None or rb11.isKinematic) and (rb2 is None or rb2.isKinematic):
+    #                 continue
+    #
+    #             result = obj1.collider.check_collision(obj2)
+    #             if result is None:
+    #                 continue
+    #
+    #             contact_points, arr,ref = result  # contact_points = [(cp, n, pn), ...]
+    #             # Optional extra data (same per manifold)
+    #             rb1, rb2 = ref
+    #             ref_face_center, incident_face = arr[0], arr[1] if isinstance(arr, (list, tuple)) and len(
+    #                 arr) >= 2 else (None, None)
+    #             if type(contact_points[0]) == tuple:
+    #                 # For each point in the manifold, add a separate constraint
+    #                 for (contact_point, normal, penetration) in contact_points:
+    #                     v1 = rb1.velocity if rb1 and not rb1.isKinematic else Vector3(0, 0, 0)
+    #                     v2 = rb2.velocity if rb2 and not rb2.isKinematic else Vector3(0, 0, 0)
+    #                     v_rel = v1 - v2
+    #                     v_norm = v_rel.dot(normal)
+    #
+    #                     contacts.append({
+    #                         "rb1": rb1,
+    #                         "rb2": rb2,
+    #                         "normal": normal,
+    #                         "v_norm": v_norm,
+    #                         "penetration": penetration,
+    #                         "contact_point": contact_point,
+    #                         "ref_face_center": ref_face_center,
+    #                         "incident_face": incident_face,
+    #                     })
+    #             elif type(contact_points[0]) == Vector3:
+    #                 contact_point, normal, penetration = contact_points
+    #                 v1 = rb1.velocity if rb1 and not rb1.isKinematic else Vector3(0, 0, 0)
+    #                 v2 = rb2.velocity if rb2 and not rb2.isKinematic else Vector3(0, 0, 0)
+    #                 v_rel = v1 - v2
+    #                 v_norm = v_rel.dot(normal)
+    #
+    #                 contacts.append({
+    #                     "rb1": rb1,
+    #                     "rb2": rb2,
+    #                     "normal": normal,
+    #                     "v_norm": v_norm,
+    #                     "penetration": penetration,
+    #                     "contact_point": contact_point,
+    #                     "ref_face_center": ref_face_center,
+    #                     "incident_face": incident_face,
+    #                 })
+    #
+    #     N = len(contacts)
+    #     if N == 0:
+    #         return contacts
+    #
+    #     # STEP 2: Build matrix A (pairwise coupling between constraints)
+    #     A = np.zeros((N, N))
+    #     for i, ci in enumerate(contacts):
+    #         ni = ci["normal"]
+    #         rb1i = ci["rb1"]
+    #         rb2i = ci["rb2"]
+    #
+    #         for j, cj in enumerate(contacts):
+    #             nj = cj["normal"]
+    #             rb1j = cj["rb1"]
+    #             rb2j = cj["rb2"]
+    #
+    #             term = 0.0
+    #             if rb1i is not None and not rb1i.isKinematic:
+    #                 if rb1i == rb1j or rb1i == rb2j:
+    #                     term += ni.dot(nj) / rb1i.mass
+    #             if rb2i is not None and not rb2i.isKinematic:
+    #                 if rb2i == rb1j or rb2i == rb2j:
+    #                     term += ni.dot(nj) / rb2i.mass
+    #             A[i, j] = term
+    #
+    #     # STEP 3: Build RHS vector b
+    #     b = np.zeros(N)
+    #     for i, c in enumerate(contacts):
+    #         rb1 = c["rb1"]
+    #         rb2 = c["rb2"]
+    #
+    #         restitution = 0.0
+    #         if rb1 and rb2:
+    #             restitution = min(rb1.restitution, rb2.restitution)
+    #         elif rb1:
+    #             restitution = rb1.restitution
+    #         elif rb2:
+    #             restitution = rb2.restitution
+    #
+    #         if c["penetration"] > 0:
+    #             b[i] = -restitution * c["v_norm"] + (beta * c["penetration"]) * (1-restitution) / dt
+    #
+    #         else:
+    #             b[i] = -restitution * c["v_norm"]
+    #
+    #     # STEP 4: Solve impulses (nonnegative)
+    #
+    #     impulses = np.linalg.pinv(A) @ b
+    #     impulses = np.maximum(impulses, 0.0)
+    #     # impulses = np.floor(impulses * 10) / 10 # extrimly bad
+    #     # STEP 5: Apply impulses for each contact point
+    #     for i, contact in enumerate(contacts):
+    #         J = impulses[i]
+    #         if contact["v_norm"] > 0:
+    #             continue  # separating
+    #
+    #         n = contact["normal"]
+    #
+    #         if contact["rb1"] and contact["rb2"]:
+    #             rb1 = contact["rb1"]
+    #             rb2 = contact["rb2"]
+    #             if not rb1.isKinematic and not rb2.isKinematic:
+    #                 self.resolve_dynamic_collision(contact, J)
+    #                 self.apply_friction_impulse(contact, n, J)
+    #             elif (not rb1.isKinematic) or (not rb2.isKinematic):
+    #                 self.resolve_kinematic_collision(contact, J)
+    #                 self.apply_friction_impulse(contact, n, J)
+    #
+    #     return contacts
+
     def Stage3(self, children, dt):
         contacts = []
 
@@ -1878,7 +2022,7 @@ class Object:
                 restitution = rb2.restitution
 
             if c["penetration"] > 0:
-                b[i] = -restitution * c["v_norm"] + beta * c["penetration"] * (1-restitution) / dt
+                b[i] = -(1 + restitution) * c["v_norm"] + (beta * c["penetration"]) * (1-restitution) / dt
 
             else:
                 b[i] = -restitution * c["v_norm"]
@@ -1891,8 +2035,9 @@ class Object:
         # STEP 5: Apply impulses for each contact point
         for i, contact in enumerate(contacts):
             J = impulses[i]
-            if contact["v_norm"] > 0:
-                continue  # separating
+            # if contact["v_norm"] >= 0:
+            #     J = 0
+            #     continue  # separating
 
             n = contact["normal"]
 
@@ -1904,10 +2049,9 @@ class Object:
                     self.apply_friction_impulse(contact, n, J)
                 elif (not rb1.isKinematic) or (not rb2.isKinematic):
                     self.resolve_kinematic_collision(contact, J)
-                    # self.apply_friction_impulse(contact, n, J)
+                    self.apply_friction_impulse(contact, n, J)
 
         return contacts
-
 
     def apply_friction_impulse(self, contact, n, Jn_delta):
         """
@@ -2158,7 +2302,7 @@ class Object:
         # impulse_vec = np.maximum(impulse_vec, 0.0)
         if rb1 and not rb1.isKinematic:
             rb1.velocity += impulse_vec / rb1.mass
-
+            rb2.force = Vector3()
             # Angular impulse for rb1
             r1 = contact_point - rb1.position  # lever arm
             angular_impulse1 = r1.cross(impulse_vec)
@@ -2166,7 +2310,7 @@ class Object:
 
         if rb2 and not rb2.isKinematic:
             rb2.velocity -= impulse_vec / rb2.mass
-
+            rb2.force = Vector3()
             # Angular impulse for rb2
             r2 = contact_point - rb2.position
             angular_impulse2 = r2.cross(impulse_vec)
@@ -2181,20 +2325,13 @@ class Object:
         rb1 = contact["rb1"]
         rb2 = contact["rb2"]
 
-        restitution = 0.0
-        if rb1 and rb2:
-            restitution = min(rb1.restitution, rb2.restitution)
-        elif rb1:
-            restitution = rb1.restitution
-        elif rb2:
-            restitution = rb2.restitution
-
-        J *= (1 + restitution)
         impulse_vec = n * J
 
         if rb1 and not rb1.isKinematic:
             rb1.velocity += impulse_vec / rb1.mass
-
+            normal = rb2.force * n
+            rb2.force += normal
+            # rb2.force = Vector3()
             # Angular impulse for rb1
             r1 = contact_point - rb1.position
             angular_impulse1 = r1.cross(impulse_vec)
@@ -2205,10 +2342,11 @@ class Object:
 
         elif rb2 and not rb2.isKinematic:
             rb2.velocity -= (impulse_vec / rb2.mass)
+            normal = rb2.force * n
             # gravity = Vector3(0, -9.8, 0)
             # rb2.force -= gravity * rb2.mass
-            rb2.force = Vector3()
-
+            # rb2.force = Vector3()
+            rb2.force +=normal
             # Angular impulse for rb2
             r2 = contact_point - rb2.position
             angular_impulse2 = r2.cross(-impulse_vec)
@@ -2344,7 +2482,7 @@ class Object:
                 for component in child.components.values():
                     if hasattr(component, 'Update') and component.Update is not None:
                         try:
-                            component.Update()
+                            component.Update(dt)
                         except Exception as e:
                             print(f"[Error] Exception in {component.__class__.__name__}.Update(): {e}")
 
@@ -2357,7 +2495,12 @@ class Object:
         for child in children:
             rb = child.get_component("Rigidbody")
             if rb is not None:
-                child.integrat(dt)
+                child_children = child.get_all_children_not_physics()
+                for child_of_child in child_children:
+                    child_of_child.position += child_of_child.Rigidbody.velocity * dt \
+                                      + 0.5 * child_of_child.Rigidbody.acceleration * dt * dt
+                if not rb.isKinematic:
+                    child.integrat(dt)
 
         for child in children1:
             child.rotation = child.quaternion.to_euler()
@@ -2407,18 +2550,15 @@ class Object:
                    + 0.5 * self.Rigidbody.angular_acceleration * dt * dt
 
         self.quaternion *= Quaternion.euler(ang_disp)
+        self.Rigidbody.velocity += self.Rigidbody.acceleration * dt
 
         self.position += self.Rigidbody.velocity * dt \
                          + 0.5 * self.Rigidbody.acceleration * dt * dt
 
-        self.Rigidbody.velocity += self.Rigidbody.acceleration * dt
 
         self.Rigidbody.force = Vector3(0, 0, 0)
         self.Rigidbody.torque = Vector3(0, 0, 0)
-        children = self.get_all_children_not_physics()
-        for child in children:
-            child.position += self.Rigidbody.velocity * dt \
-                              + 0.5 * self.Rigidbody.acceleration * dt * dt
+
 
 
         self.Rigidbody.angular_acceleration = Vector3(0, 0, 0)
