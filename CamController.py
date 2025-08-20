@@ -1,16 +1,16 @@
 import time
 
 import keyboard
-
+import Core
 from bereshit import Vector3,rotate_vector_quaternion
 from bereshit import Quaternion
 
 class CamController:
-    def __init__(self,speed=0.3):
+    def __init__(self,speed=5):
         self.force_amount = speed
         self.force_amount2 = speed
 
-    def keyboard_controller(self):
+    def keyboard_controller(self,dt):
         if keyboard.is_pressed('esc'):
             print("Paused. Release ESC to continue.")
 
@@ -31,32 +31,32 @@ class CamController:
             print("Continuing...")
         if keyboard.is_pressed('w'):
 
-            self.parent.position += rotate_vector_quaternion(Vector3(0, 0, self.force_amount),self.parent.quaternion)
+            self.parent.position += rotate_vector_quaternion(Vector3(0, 0, self.force_amount),self.parent.quaternion) * dt
 
         if keyboard.is_pressed('s'):
-            self.parent.position += rotate_vector_quaternion(Vector3(0, 0, -self.force_amount), self.parent.quaternion)
+            self.parent.position += rotate_vector_quaternion(Vector3(0, 0, -self.force_amount), self.parent.quaternion) * dt
 
 
 
         if keyboard.is_pressed('d'):
-            self.parent.position += rotate_vector_quaternion(Vector3(-self.force_amount, 0, 0), self.parent.quaternion)
+            self.parent.position += rotate_vector_quaternion(Vector3(-self.force_amount, 0, 0), self.parent.quaternion) * dt
 
 
         if keyboard.is_pressed('a'):
-            self.parent.position += rotate_vector_quaternion(Vector3(self.force_amount, 0, 0), self.parent.quaternion)
+            self.parent.position += rotate_vector_quaternion(Vector3(self.force_amount, 0, 0), self.parent.quaternion) * dt
 
 
         if keyboard.is_pressed('space'):
-            self.parent.position += Vector3(0, self.force_amount2, 0)
+            self.parent.position += Vector3(0, self.force_amount2, 0) * dt
 
         if keyboard.is_pressed('left shift'):
-            self.parent.position += Vector3(0, -self.force_amount2, 0)
+            self.parent.position += Vector3(0, -self.force_amount2, 0) * dt
 
 
 
 
-    def Update(self):
-        self.keyboard_controller()
+    def Update(self,dt):
+        self.keyboard_controller(dt)
 
         # # Get the player's current position
         # player_pos = self.player.position

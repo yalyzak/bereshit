@@ -1,7 +1,7 @@
 import asyncio
 import threading
 import time
-from builtins import range
+# from builtins import range
 
 from bereshit import Object
 import render as render
@@ -9,11 +9,11 @@ import render as render
 # import old_render as render
 
 
-def run(scene,speed=1,gizmos=False,scriptRefreshRate=60):
+def run(scene,speed=1,gizmos=False,scriptRefreshRate=60,tick=1/60):
     TARGET_FPS = 60
     # bereshit.dt = TARGET_FPS * 0.000165
 
-    dt = 1 / 6000
+    dt = tick
 
     startg = time.time()
     FPS = 1

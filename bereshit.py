@@ -2012,43 +2012,48 @@ class Object:
         for i, c in enumerate(contacts):
             rb1 = c["rb1"]
             rb2 = c["rb2"]
-
             restitution = 0.0
-            if rb1 and rb2:
+
+            if c["v_norm"] > -1:
+                restitution
+            elif rb1 and rb2:
                 restitution = min(rb1.restitution, rb2.restitution)
             elif rb1:
                 restitution = rb1.restitution
             elif rb2:
                 restitution = rb2.restitution
 
-            if c["penetration"] > 0:
-                b[i] = -(1 + restitution) * c["v_norm"] + (beta * c["penetration"]) * (1-restitution) / dt
 
-            else:
-                b[i] = -restitution * c["v_norm"]
+
+            b[i] = -(1 + restitution) * c["v_norm"]
+
+
 
         # STEP 4: Solve impulses (nonnegative)
 
         impulses = np.linalg.pinv(A) @ b
         impulses = np.maximum(impulses, 0.0)
-        # impulses = np.floor(impulses * 10) / 10 # extrimly bad
         # STEP 5: Apply impulses for each contact point
         for i, contact in enumerate(contacts):
             J = impulses[i]
+
             # if contact["v_norm"] >= 0:
             #     J = 0
+            #
+            #
             #     continue  # separating
-
+            flage = (restitution == 0)
+            flage = False
             n = contact["normal"]
 
             if contact["rb1"] and contact["rb2"]:
                 rb1 = contact["rb1"]
                 rb2 = contact["rb2"]
                 if not rb1.isKinematic and not rb2.isKinematic:
-                    self.resolve_dynamic_collision(contact, J)
+                    self.resolve_dynamic_collision(contact, J,flage)
                     self.apply_friction_impulse(contact, n, J)
                 elif (not rb1.isKinematic) or (not rb2.isKinematic):
-                    self.resolve_kinematic_collision(contact, J)
+                    self.resolve_kinematic_collision(contact, J,flage)
                     self.apply_friction_impulse(contact, n, J)
 
         return contacts
@@ -2280,7 +2285,7 @@ class Object:
     #     if rb2 and not rb2.isKinematic:
     #         rb2.velocity -= impulse_vec / rb2.mass
 
-    def resolve_dynamic_collision(self, contact, J):
+    def resolve_dynamic_collision(self, contact, J,flage):
         """
         Applies linear and angular impulse to both dynamic bodies, factoring restitution.
         """
@@ -2297,12 +2302,12 @@ class Object:
         elif rb2:
             restitution = rb2.restitution
 
-        J *= (1 + restitution)
         impulse_vec = n * J
         # impulse_vec = np.maximum(impulse_vec, 0.0)
         if rb1 and not rb1.isKinematic:
             rb1.velocity += impulse_vec / rb1.mass
-            rb2.force = Vector3()
+            if flage:
+                rb2.force = Vector3()
             # Angular impulse for rb1
             r1 = contact_point - rb1.position  # lever arm
             angular_impulse1 = r1.cross(impulse_vec)
@@ -2310,13 +2315,14 @@ class Object:
 
         if rb2 and not rb2.isKinematic:
             rb2.velocity -= impulse_vec / rb2.mass
-            rb2.force = Vector3()
+            if flage:
+                rb2.force = Vector3()
             # Angular impulse for rb2
             r2 = contact_point - rb2.position
             angular_impulse2 = r2.cross(impulse_vec)
             rb2.angular_velocity += -Vector3.from_np(rb2.inverse_inertia @ angular_impulse2.to_np())
 
-    def resolve_kinematic_collision(self, contact, J):
+    def resolve_kinematic_collision(self, contact, J,flage):
         """
         Applies linear and angular impulse to the dynamic body only, factoring restitution.
         """
@@ -2329,8 +2335,9 @@ class Object:
 
         if rb1 and not rb1.isKinematic:
             rb1.velocity += impulse_vec / rb1.mass
-            normal = rb2.force * n
-            rb2.force += normal
+            if flage:
+                normal = rb2.force * n
+                rb2.force += normal
             # rb2.force = Vector3()
             # Angular impulse for rb1
             r1 = contact_point - rb1.position
@@ -2342,11 +2349,13 @@ class Object:
 
         elif rb2 and not rb2.isKinematic:
             rb2.velocity -= (impulse_vec / rb2.mass)
-            normal = rb2.force * n
+            if flage:
+                normal = rb2.force * n
+                rb2.force +=normal
+            #
             # gravity = Vector3(0, -9.8, 0)
             # rb2.force -= gravity * rb2.mass
             # rb2.force = Vector3()
-            rb2.force +=normal
             # Angular impulse for rb2
             r2 = contact_point - rb2.position
             angular_impulse2 = r2.cross(-impulse_vec)
@@ -2550,11 +2559,11 @@ class Object:
                    + 0.5 * self.Rigidbody.angular_acceleration * dt * dt
 
         self.quaternion *= Quaternion.euler(ang_disp)
-        self.Rigidbody.velocity += self.Rigidbody.acceleration * dt
 
         self.position += self.Rigidbody.velocity * dt \
                          + 0.5 * self.Rigidbody.acceleration * dt * dt
 
+        self.Rigidbody.velocity += self.Rigidbody.acceleration * dt
 
         self.Rigidbody.force = Vector3(0, 0, 0)
         self.Rigidbody.torque = Vector3(0, 0, 0)
@@ -2563,6 +2572,8 @@ class Object:
 
         self.Rigidbody.angular_acceleration = Vector3(0, 0, 0)
         self.Rigidbody.torque = Vector3(0, 0, 0)
+
+        # self.Rigidbody.energy = 0.5 * self.parent.Rigidbody.mass * self.parent.Rigidbody.velocity.magnitude() ** 2 + self.parent.Rigidbody.mass * 9.8 * self.parent.position.y
 
     # def integrat2(self, dt):
     #
