@@ -9,6 +9,7 @@ from math import sqrt
 import trimesh
 import open3d as o3d
 import moderngl
+import traceback
 
 dt = 1 / 60
 
@@ -1319,6 +1320,7 @@ class Rigidbody:
         self.torque = Vector3()
         self.force = force or Vector3(0, 0, 0)
         self.isKinematic = isKinematic
+        self.forward = Vector3()
 
         self.useGravity = useGravity
 
@@ -1355,7 +1357,7 @@ class Rigidbody:
         self.center_of_mass = owner_object.position
         self.obj = owner_object
         self.material = owner_object.material.kind
-
+        self.forward = rotate_vector_quaternion(self.position, self.obj.quaternion)
         EPSILON = 1e-8  # Small value to avoid division by zero
 
         self.inertia = Vector3(
@@ -1526,9 +1528,13 @@ class Object:
         return obj_copy
 
     def add_child(self, new_child):
+        if new_child.parent == None:
+            new_child.parent = self
+        new_child.world = self
         for i, child in enumerate(self.children):
             if child.name == new_child.name:
                 self.children[i] = new_child
+
                 # render.prepare_mesh_for_object(new_child)
                 break
         else:
@@ -1739,6 +1745,7 @@ class Object:
         if self.parent == None:  # the world does not need an update
             for child in children:
                 child.Stage1(children)
+
             return
 
         if rb is None or rb.isKinematic:
@@ -2014,9 +2021,9 @@ class Object:
             rb2 = c["rb2"]
             restitution = 0.0
 
-            if c["v_norm"] > -1:
-                restitution
-            elif rb1 and rb2:
+
+
+            if rb1 and rb2:
                 restitution = min(rb1.restitution, rb2.restitution)
             elif rb1:
                 restitution = rb1.restitution
@@ -2027,7 +2034,22 @@ class Object:
 
             b[i] = -(1 + restitution) * c["v_norm"]
 
+        k = np.zeros(N)
+        for i, c in enumerate(contacts):
+            rb1 = c["rb1"]
+            rb2 = c["rb2"]
+            restitution = 0.0
 
+            if c["v_norm"] > -1:
+                restitution
+            elif rb1 and rb2:
+                restitution = min(rb1.restitution, rb2.restitution)
+            elif rb1:
+                restitution = rb1.restitution
+            elif rb2:
+                restitution = rb2.restitution
+
+            k[i] = (-(1 + restitution) * c["v_norm"])/ ((1/rb1.mass) + (1/rb2.mass))
 
         # STEP 4: Solve impulses (nonnegative)
 
@@ -2035,7 +2057,7 @@ class Object:
         impulses = np.maximum(impulses, 0.0)
         # STEP 5: Apply impulses for each contact point
         for i, contact in enumerate(contacts):
-            J = impulses[i]
+            J = k[i]
 
             # if contact["v_norm"] >= 0:
             #     J = 0
@@ -2043,7 +2065,7 @@ class Object:
             #
             #     continue  # separating
             flage = (restitution == 0)
-            flage = False
+            # flage = False
             n = contact["normal"]
 
             if contact["rb1"] and contact["rb2"]:
@@ -2331,7 +2353,7 @@ class Object:
         rb1 = contact["rb1"]
         rb2 = contact["rb2"]
 
-        impulse_vec = n * J
+        impulse_vec = n * J * 2
 
         if rb1 and not rb1.isKinematic:
             rb1.velocity += impulse_vec / rb1.mass
@@ -2482,7 +2504,8 @@ class Object:
                     try:
                         component.Start()
                     except Exception as e:
-                        print(f"[Error] Exception in {component.__class__.__name__}.Start(): {e}")
+                        print(f"[Error] Exception in {component.__class__.__name__}.Start():")
+                        traceback.print_exc()
 
     def update(self, dt, chack=True, gizmos=False):
         children1 = self.get_all_children_bereshit()
@@ -2494,6 +2517,7 @@ class Object:
                             component.Update(dt)
                         except Exception as e:
                             print(f"[Error] Exception in {component.__class__.__name__}.Update(): {e}")
+                            traceback.print_exc()
 
         children = self.get_all_children_physics()
         self.Stage1(children)  # APPLY GRAVITY and external forces
@@ -2558,7 +2582,7 @@ class Object:
         ang_disp = self.Rigidbody.angular_velocity * dt \
                    + 0.5 * self.Rigidbody.angular_acceleration * dt * dt
 
-        self.quaternion *= Quaternion.euler(ang_disp)
+        # self.quaternion *= Quaternion.euler(ang_disp)
 
         self.position += self.Rigidbody.velocity * dt \
                          + 0.5 * self.Rigidbody.acceleration * dt * dt
