@@ -16,32 +16,33 @@ base_obj = Object(
     rotation=(0, 0, 0),
     name="obj"
 )
-base_obj.add_component(Rigidbody(useGravity=True, velocity=Vector3(0, 0, 0), restitution=0.6))
+r=1
+base_obj.add_component(Rigidbody(useGravity=True, velocity=Vector3(0, 0, 0), restitution=r))
 base_obj.add_component(BoxCollider())
 
 # stack of 10 objects
 stack = []
-for i in range(3):
+for i in range(1):
     obj_copy = copy.deepcopy(base_obj)
-    obj_copy.position = Vector3(0, 2+i*1.5, 0)  # space slightly so no initial overlap
+    obj_copy.position = Vector3(10, 5, 0)  # space slightly so no initial overlap
     obj_copy.name = f"obj_{i}"
     stack.append(obj_copy)
 
 # floor
-floor = Object(position=(0,0,0), size=(1,1,1), rotation=(0,0,0), name="floor")
-floor.add_component(Rigidbody(useGravity=False, restitution=0.6,mass=9999))
+floor = Object(position=(0,0,0), size=(100,1,100), rotation=(0,0,0), name="floor")
+floor.add_component(Rigidbody(isKinematic=True, restitution=r,mass=9999))
 floor.add_component(BoxCollider())
 
 # camera
-camera = Object(size=(1,1,1), position=(0,0,-5), name='camera')
+camera = Object(size=(1,1,1), position=(10,0,-5), name='camera')
 camera.add_component(Camera())
 camera.add_component(Mesh_rander(shape="empty"))
 camera.add_component(CamController())
 camera.add_component(Rigidbody(isKinematic=True))
 camera.add_component(BoxCollider())
-camera.add_component(rotate())
-camera.add_component(Shoot())
-
+# camera.add_component(rotate())
+# camera.add_component(Shoot())
+# stack[4].add_component(debug(None))
 # scene with stacked objects
 scene = Object(
     position=Vector3(0,0,0),
@@ -50,4 +51,4 @@ scene = Object(
     name="scene"
 )
 
-Core.run(scene, gizmos=False, speed=1, tick=1/60, scriptRefreshRate=1)
+Core.run(scene, gizmos=False, speed=1, tick=1/60, scriptRefreshRate=100)

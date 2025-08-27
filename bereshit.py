@@ -260,13 +260,57 @@ class Quaternion:
 
         return Vector3(math.degrees(roll), math.degrees(pitch), math.degrees(yaw))
 
-    def euler(self):
-        roll = self.x
-        pitch = self.y
-        yaw = self.z
+    def look_rotation(forward: "Vector3", up: "Vector3") -> "Quaternion":
+        """
+        Builds a quaternion that rotates the +Z axis to align with `forward`,
+        keeping `up` as close as possible to the given up vector.
+        """
+        f = forward.normalized()
+        u = up.normalized()
+        r = u.cross(f).normalized()
+        u = f.cross(r)  # recompute to ensure orthogonality
+
+        # Construct a rotation matrix from r, u, f
+        m00, m01, m02 = r.x, u.x, f.x
+        m10, m11, m12 = r.y, u.y, f.y
+        m20, m21, m22 = r.z, u.z, f.z
+
+        # Convert rotation matrix → quaternion
+        trace = m00 + m11 + m22
+
+        if trace > 0:
+            s = math.sqrt(trace + 1.0) * 2
+            w = 0.25 * s
+            x = (m21 - m12) / s
+            y = (m02 - m20) / s
+            z = (m10 - m01) / s
+        elif (m00 > m11) and (m00 > m22):
+            s = math.sqrt(1.0 + m00 - m11 - m22) * 2
+            w = (m21 - m12) / s
+            x = 0.25 * s
+            y = (m01 + m10) / s
+            z = (m02 + m20) / s
+        elif m11 > m22:
+            s = math.sqrt(1.0 + m11 - m00 - m22) * 2
+            w = (m02 - m20) / s
+            x = (m01 + m10) / s
+            y = 0.25 * s
+            z = (m12 + m21) / s
+        else:
+            s = math.sqrt(1.0 + m22 - m00 - m11) * 2
+            w = (m10 - m01) / s
+            x = (m02 + m20) / s
+            y = (m12 + m21) / s
+            z = 0.25 * s
+
+        return Quaternion(x, y, z, w)
+    @classmethod
+    def euler(cls, vec3):  # vec3 = Vector3(roll, pitch, yaw)
+        roll = vec3.x
+        pitch = vec3.y
+        yaw = vec3.z
 
         c1 = math.cos(yaw / 2)
-
         s1 = math.sin(yaw / 2)
         c2 = math.cos(pitch / 2)
         s2 = math.sin(pitch / 2)
@@ -278,8 +322,71 @@ class Quaternion:
         y = c1 * s2 * c3 + s1 * c2 * s3
         z = s1 * c2 * c3 - c1 * s2 * s3
 
-        return Quaternion(x, y, z, w)
+        return cls(x, y, z, w)
+    # def euler(self):
+    #     roll = self.x
+    #     pitch = self.y
+    #     yaw = self.z
+    #
+    #     c1 = math.cos(yaw / 2)
+    #
+    #     s1 = math.sin(yaw / 2)
+    #     c2 = math.cos(pitch / 2)
+    #     s2 = math.sin(pitch / 2)
+    #     c3 = math.cos(roll / 2)
+    #     s3 = math.sin(roll / 2)
+    #
+    #     w = c1 * c2 * c3 + s1 * s2 * s3
+    #     x = c1 * c2 * s3 - s1 * s2 * c3
+    #     y = c1 * s2 * c3 + s1 * c2 * s3
+    #     z = s1 * c2 * c3 - c1 * s2 * s3
+    #
+    #     return Quaternion(x, y, z, w)
 
+    def look_rotation(forward: "Vector3", up: "Vector3") -> "Quaternion":
+        """
+        Builds a quaternion that rotates the +Z axis to align with `forward`,
+        keeping `up` as close as possible to the given up vector.
+        """
+        f = forward.normalized()
+        u = up.normalized()
+        r = u.cross(f).normalized()
+        u = f.cross(r)  # recompute to ensure orthogonality
+
+        # Construct a rotation matrix from r, u, f
+        m00, m01, m02 = r.x, u.x, f.x
+        m10, m11, m12 = r.y, u.y, f.y
+        m20, m21, m22 = r.z, u.z, f.z
+
+        # Convert rotation matrix → quaternion
+        trace = m00 + m11 + m22
+
+        if trace > 0:
+            s = math.sqrt(trace + 1.0) * 2
+            w = 0.25 * s
+            x = (m21 - m12) / s
+            y = (m02 - m20) / s
+            z = (m10 - m01) / s
+        elif (m00 > m11) and (m00 > m22):
+            s = math.sqrt(1.0 + m00 - m11 - m22) * 2
+            w = (m21 - m12) / s
+            x = 0.25 * s
+            y = (m01 + m10) / s
+            z = (m02 + m20) / s
+        elif m11 > m22:
+            s = math.sqrt(1.0 + m11 - m00 - m22) * 2
+            w = (m02 - m20) / s
+            x = (m01 + m10) / s
+            y = 0.25 * s
+            z = (m12 + m21) / s
+        else:
+            s = math.sqrt(1.0 + m22 - m00 - m11) * 2
+            w = (m10 - m01) / s
+            x = (m02 + m20) / s
+            y = (m12 + m21) / s
+            z = 0.25 * s
+
+        return Quaternion(x, y, z, w)
     @staticmethod
     def axis_angle(axis, angle_rad):
         """Create a quaternion representing a rotation of angle_rad around 'axis' (Vector3)."""
@@ -1138,8 +1245,8 @@ class BoxCollider:
         a_center = self.obj.position
         b_center = other_collider.obj.position
 
-        a_axes = get_axes(self.obj.quaternion)
-        b_axes = get_axes(other_collider.obj.quaternion)
+        a_axes = get_axes(self.obj.quaternion.conjugate())
+        b_axes = get_axes(other_collider.obj.quaternion.conjugate())
 
         a_half = self.obj.size * 0.5
         b_half = other_collider.obj.size * 0.5
@@ -1236,7 +1343,7 @@ class BoxCollider:
 
             return avg_p, avg_n, avg_d
 
-        contact_points = average_contact_data(contact_points)
+        # contact_points = average_contact_data(contact_points)
         if contact_points is None or contact_points == []:
             return None
         # contact_point, normal, smallest_overlap = contact_points
@@ -1927,7 +2034,9 @@ class Object:
     #     return contacts
 
     def Stage3(self, children, dt):
+
         contacts = []
+        contacts2 = []
 
         beta = 0.0  # softness factor for positional correction
 
@@ -1953,15 +2062,26 @@ class Object:
                 rb1, rb2 = ref
                 ref_face_center, incident_face = arr[0], arr[1] if isinstance(arr, (list, tuple)) and len(
                     arr) >= 2 else (None, None)
-                if type(contact_points[0]) == tuple:
-                    # For each point in the manifold, add a separate constraint
+                if type(contact_points[0]) == tuple: # For each point in the manifold, add a separate constraint
                     for (contact_point, normal, penetration) in contact_points:
-                        v1 = rb1.velocity if rb1 and not rb1.isKinematic else Vector3(0, 0, 0)
-                        v2 = rb2.velocity if rb2 and not rb2.isKinematic else Vector3(0, 0, 0)
-                        v_rel = v1 - v2
+                        r1 = contact_point - rb1.position
+                        r2 = contact_point - rb2.position
+
+                        v1 = (rb1.velocity + rb1.angular_velocity.cross(r1)) if (
+                                    rb1 and not rb1.isKinematic) else Vector3(0, 0, 0)
+                        v2 = (rb2.velocity + rb2.angular_velocity.cross(r2)) if (
+                                    rb2 and not rb2.isKinematic) else Vector3(0, 0, 0)
+
+                        v_rel = v1 - v2  # B minus A (matches normal pointing A->B)
                         v_norm = v_rel.dot(normal)
 
-                        contacts.append({
+                        # if v_norm >= 0:
+                        #     v_norm = -v_norm
+                        #     normal = -normal
+                        # v_norm = -abs(v_norm)
+                        contacts2.append({
+                            "r1" : r1,
+                            "r2": r2,
                             "rb1": rb1,
                             "rb2": rb2,
                             "normal": normal,
@@ -1971,6 +2091,7 @@ class Object:
                             "ref_face_center": ref_face_center,
                             "incident_face": incident_face,
                         })
+                    contacts.append(contacts2)
                 elif type(contact_points[0]) == Vector3:
                     contact_point, normal, penetration = contact_points
                     v1 = rb1.velocity if rb1 and not rb1.isKinematic else Vector3(0, 0, 0)
@@ -1978,7 +2099,7 @@ class Object:
                     v_rel = v1 - v2
                     v_norm = v_rel.dot(normal)
 
-                    contacts.append({
+                    contacts.append([{
                         "rb1": rb1,
                         "rb2": rb2,
                         "normal": normal,
@@ -1987,96 +2108,130 @@ class Object:
                         "contact_point": contact_point,
                         "ref_face_center": ref_face_center,
                         "incident_face": incident_face,
-                    })
+                    }])
 
-        N = len(contacts)
+        N = 0
+        for i in range(len(contacts)):
+            N += len(contacts[i])
         if N == 0:
             return contacts
 
         # STEP 2: Build matrix A (pairwise coupling between constraints)
-        A = np.zeros((N, N))
-        for i, ci in enumerate(contacts):
-            ni = ci["normal"]
-            rb1i = ci["rb1"]
-            rb2i = ci["rb2"]
-
-            for j, cj in enumerate(contacts):
-                nj = cj["normal"]
-                rb1j = cj["rb1"]
-                rb2j = cj["rb2"]
-
-                term = 0.0
-                if rb1i is not None and not rb1i.isKinematic:
-                    if rb1i == rb1j or rb1i == rb2j:
-                        term += ni.dot(nj) / rb1i.mass
-                if rb2i is not None and not rb2i.isKinematic:
-                    if rb2i == rb1j or rb2i == rb2j:
-                        term += ni.dot(nj) / rb2i.mass
-                A[i, j] = term
-
-        # STEP 3: Build RHS vector b
-        b = np.zeros(N)
-        for i, c in enumerate(contacts):
-            rb1 = c["rb1"]
-            rb2 = c["rb2"]
-            restitution = 0.0
-
-
-
-            if rb1 and rb2:
-                restitution = min(rb1.restitution, rb2.restitution)
-            elif rb1:
-                restitution = rb1.restitution
-            elif rb2:
-                restitution = rb2.restitution
-
-
-
-            b[i] = -(1 + restitution) * c["v_norm"]
+        # A = np.zeros((N, N))
+        # for i, ci in enumerate(contacts):
+        #     ni = ci["normal"]
+        #     rb1i = ci["rb1"]
+        #     rb2i = ci["rb2"]
+        #
+        #     for j, cj in enumerate(contacts):
+        #         nj = cj["normal"]
+        #         rb1j = cj["rb1"]
+        #         rb2j = cj["rb2"]
+        #
+        #         term = 0.0
+        #         if rb1i is not None and not rb1i.isKinematic:
+        #             if rb1i == rb1j or rb1i == rb2j:
+        #                 term += ni.dot(nj) / rb1i.mass
+        #         if rb2i is not None and not rb2i.isKinematic:
+        #             if rb2i == rb1j or rb2i == rb2j:
+        #                 term += ni.dot(nj) / rb2i.mass
+        #         A[i, j] = term
+        #
+        # # STEP 3: Build RHS vector b
+        # b = np.zeros(N)
+        # for i, c in enumerate(contacts):
+        #     rb1 = c["rb1"]
+        #     rb2 = c["rb2"]
+        #     restitution = 0.0
+        #
+        #
+        #
+        #     if rb1 and rb2:
+        #         restitution = min(rb1.restitution, rb2.restitution)
+        #     elif rb1:
+        #         restitution = rb1.restitution
+        #     elif rb2:
+        #         restitution = rb2.restitution
+        #
+        #
+        #
+        #     b[i] = -(1 + restitution) * c["v_norm"]
 
         k = np.zeros(N)
-        for i, c in enumerate(contacts):
-            rb1 = c["rb1"]
-            rb2 = c["rb2"]
-            restitution = 0.0
+        for contact_point in contacts:
+            length = len(contact_point)
+            for i, c in enumerate(contact_point):
+                rb1 = c["rb1"]
+                rb2 = c["rb2"]
+                restitution = 0.0
 
-            if c["v_norm"] > -1:
-                restitution
-            elif rb1 and rb2:
-                restitution = min(rb1.restitution, rb2.restitution)
-            elif rb1:
-                restitution = rb1.restitution
-            elif rb2:
-                restitution = rb2.restitution
+                if c["v_norm"] > -1:
+                    restitution
+                elif rb1 and rb2:
+                    restitution = min(rb1.restitution, rb2.restitution)
+                elif rb1:
+                    restitution = rb1.restitution
+                elif rb2:
+                    restitution = rb2.restitution
 
-            k[i] = (-(1 + restitution) * c["v_norm"])/ ((1/rb1.mass) + (1/rb2.mass))
+                rn1 = c["r1"].cross(c["normal"])  # Vector3
+                rn2 = c["r2"].cross(c["normal"])
+                if not rb1.isKinematic:
+                    term1 = (Vector3.from_np(Iinv_world(rb1) @ rn1.to_np())).cross(c["r1"])
+                else:
+                    term1 = Vector3(0, 0, 0)
+
+                if not rb2.isKinematic:
+                    term2 = (Vector3.from_np(Iinv_world(rb2) @ rn2.to_np())).cross(c["r2"])
+                else:
+                    term2 = Vector3(0, 0, 0)
+                denominator = (0 if rb1.isKinematic else 1 / rb1.mass) \
+                              + (0 if rb2.isKinematic else 1 / rb2.mass) \
+                              + c["normal"].dot(term1 + term2)
+
+                # denominator = (1/rb1.mass) + (1/rb2.mass) + c["normal"].dot(term1 + term2)  # scalar
+
+                # Guard against degeneracy
+                # if K <= 1e-12:
+                #     j = 0.0
+                # else:
+                #     # Restitution only if closing velocity
+                #     vn = min(c["v_norm"], 0.0)
+                # j = -(1.0 + e) * vn / K
+                #
+                # # Impulse vector (along normal)
+                # J = n * j
+
+                k[i] = (-(1 + restitution) * c["v_norm"])/denominator
+                # k[i] /= length
 
         # STEP 4: Solve impulses (nonnegative)
 
-        impulses = np.linalg.pinv(A) @ b
-        impulses = np.maximum(impulses, 0.0)
+        # impulses = np.linalg.pinv(A) @ b
+        # impulses = np.maximum(impulses, 0.0)
         # STEP 5: Apply impulses for each contact point
-        for i, contact in enumerate(contacts):
-            J = k[i]
+        for contact_point in contacts:
+            for i, contact in enumerate(contact_point):
+                J = k[i]
 
-            # if contact["v_norm"] >= 0:
-            #     J = 0
-            #
-            #
-            #     continue  # separating
-            flage = (restitution == 0)
-            # flage = False
-            n = contact["normal"]
+                # if contact["v_norm"] >= 0:
+                #     J = 0
+                #
+                #
+                #     continue  # separating
+                flage = (restitution == 0)
+                flage = False
+                n = contact["normal"]
 
-            if contact["rb1"] and contact["rb2"]:
-                rb1 = contact["rb1"]
-                rb2 = contact["rb2"]
-                if not rb1.isKinematic and not rb2.isKinematic:
-                    self.resolve_dynamic_collision(contact, J,flage)
-                    self.apply_friction_impulse(contact, n, J)
-                elif (not rb1.isKinematic) or (not rb2.isKinematic):
-                    self.resolve_kinematic_collision(contact, J,flage)
-                    self.apply_friction_impulse(contact, n, J)
+                if contact["rb1"] and contact["rb2"]:
+                    rb1 = contact["rb1"]
+                    rb2 = contact["rb2"]
+                    if not rb1.isKinematic and not rb2.isKinematic:
+                        self.resolve_dynamic_collision(contact, J,flage)
+                        self.apply_friction_impulse(contact, n, J)
+                    elif (not rb1.isKinematic) or (not rb2.isKinematic):
+                        self.resolve_kinematic_collision(contact, J,flage)
+                        self.apply_friction_impulse(contact, n, J)
 
         return contacts
 
@@ -2116,20 +2271,7 @@ class Object:
         r2 = p - c2
 
         # Make sure inverse inertia is in WORLD space
-        def Iinv_world(rb):
-            if not rb or rb.isKinematic:
-                # return identity-like mapper
-                class _Zero:
-                    def __matmul__(self, x): return x  # won't be used
 
-                return _Zero()
-            # If rb.inverse_inertia is BODY-space, rotate it:
-            # expected fields: rb.inv_inertia_body (3x3), rb.rotation_matrix (R)
-            if hasattr(rb, "inv_inertia_body") and hasattr(rb, "rotation_matrix"):
-                R = rb.rotation_matrix  # 3x3 world-from-body
-                return R @ rb.inv_inertia_body @ R.T
-            # else assume the given one is already world
-            return rb.inverse_inertia
 
         I1 = Iinv_world(rb1)
         I2 = Iinv_world(rb2)
@@ -2353,7 +2495,7 @@ class Object:
         rb1 = contact["rb1"]
         rb2 = contact["rb2"]
 
-        impulse_vec = n * J * 2
+        impulse_vec = n * J
 
         if rb1 and not rb1.isKinematic:
             rb1.velocity += impulse_vec / rb1.mass
@@ -2367,7 +2509,7 @@ class Object:
             R = rb1.parent.quaternion.to_matrix3()  # Convert quaternion to 3×3 rotation matrix
             I_inv_world = R @ rb1.inverse_inertia @ R.T
 
-            rb1.angular_velocity += -Vector3.from_np(I_inv_world @ angular_impulse1.to_np())
+            rb1.angular_velocity += Vector3.from_np(I_inv_world @ angular_impulse1.to_np())
 
         elif rb2 and not rb2.isKinematic:
             rb2.velocity -= (impulse_vec / rb2.mass)
@@ -2380,8 +2522,10 @@ class Object:
             # rb2.force = Vector3()
             # Angular impulse for rb2
             r2 = contact_point - rb2.position
-            angular_impulse2 = r2.cross(-impulse_vec)
-            rb2.angular_velocity += -Vector3.from_np(rb2.inverse_inertia @ angular_impulse2.to_np())
+            angular_impulse2 = r2.cross(-impulse_vec)  # r2 × (-J)
+            R = rb2.parent.quaternion.to_matrix3()  # 3x3 rotation matrix
+            inverse_inertia_world = R @ rb2.inverse_inertia @ R.T
+            rb2.angular_velocity += Vector3.from_np(inverse_inertia_world @ angular_impulse2.to_np())
 
     # def Stage3(self,children):
     #
@@ -2476,15 +2620,22 @@ class Object:
         rb.normal_forces = Vector3()
 
     def set_gizmos(self, contacts=[]):
-        for i, contact in enumerate(contacts):
-            self.children[1].children[i].position = contact['contact_point']
-            for j in range(4):
-                pass
+        g =False
+        for contact_point in contacts:
+            for i, contact in enumerate(contact_point):
+                self.children[1].children[i].position = contact['contact_point']
+                self.children[1].children[i].quaternion = Quaternion.look_rotation(contact["normal"], Vector3(0,1,0))
+                g = True
+
+                for j in range(4):
+                    pass
+
                 # self.children[1].children[i].children[j].position = contact['ref_face_center'][j][0]
                 # self.children[1].children[i].children[j].size = contact['ref_face_center'][j][1]
 
                 # self.children[1].children[i].children[j + 4].position = contact['incident_face'][j]
-
+        # while g:
+        #     pass
         # Object(position=contacts['contact_point'])
 
     def solve_joints(self, children, dt):
@@ -2577,12 +2728,11 @@ class Object:
             self.Rigidbody.torque.z / self.Rigidbody.inertia.z if self.Rigidbody.inertia.z != 0 else 0
         )
         self.Rigidbody.angular_velocity += self.Rigidbody.angular_acceleration * dt
-        # self.Rigidbody.angular_velocity *= self.Rigidbody.drag
         # 4.3) Integrate rotation
         ang_disp = self.Rigidbody.angular_velocity * dt \
                    + 0.5 * self.Rigidbody.angular_acceleration * dt * dt
 
-        # self.quaternion *= Quaternion.euler(ang_disp)
+        self.quaternion *= Quaternion.euler(ang_disp)
 
         self.position += self.Rigidbody.velocity * dt \
                          + 0.5 * self.Rigidbody.acceleration * dt * dt
@@ -2817,7 +2967,20 @@ class Object:
                 f")")
 
 
+def Iinv_world(rb):
+    if not rb or rb.isKinematic:
+        # return identity-like mapper
+        class _Zero:
+            def __matmul__(self, x): return x  # won't be used
 
+        return _Zero()
+    # If rb.inverse_inertia is BODY-space, rotate it:
+    # expected fields: rb.inv_inertia_body (3x3), rb.rotation_matrix (R)
+    if hasattr(rb, "inv_inertia_body") and hasattr(rb, "rotation_matrix"):
+        R = rb.rotation_matrix  # 3x3 world-from-body
+        return R @ rb.inv_inertia_body @ R.T
+    # else assume the given one is already world
+    return rb.inverse_inertia
 def compute_axes_from_euler(rotation):
     """
     Given Euler angles (rotation.x, rotation.y, rotation.z) in degrees,
