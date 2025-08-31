@@ -1,0 +1,528 @@
+﻿Run Server.py
+
+
+import socket
+import select
+import time
+from content_filter import ContentFilter
+from user_manager import UserManager
+from clientHandler import ClientHandler
+from server import Server
+content_filter = ContentFilter(UseGenai=True,UseNLP=False)
+server = Server(filter=content_filter)
+
+
+def run(server):
+   while True:
+       read_sockets, _, _ = select.select(server.hendler.sockets_list, [], [], 0.1)  # non-blocking with timeout
+
+
+       for notified_socket in read_sockets:
+           if notified_socket == server.server_socket:
+               client_socket, client_address = server.server_socket.accept()
+               ip = client_address[0]
+               if server.user_manager.is_banned(ip):
+                   print(f"Rejected banned IP: {ip}")
+                   try:
+                       client_socket.send("[SYSTEM] You are banned from this server.".encode())
+                   except:
+                       pass
+               server.hendler.sockets_list.append(client_socket)
+               server.hendler.clients[client_socket] = {"username": None}
+               print(f"New connection from {client_address}")
+           else:
+               try:
+                   # message = notified_socket.recv(1024).decode().strip()
+                   header,message = server.hendler.receive_message(notified_socket)
+                   server.hander_msg(header,message,ip,server.hendler,notified_socket)
+
+
+               except:
+                   server.hendler.cleanup_client(notified_socket)
+
+
+       # Handle delayed kicks
+       now = time.time()
+       for sock in list(server.users_to_kick.keys()):
+           if now - server.users_to_kick[sock] > 0.5:  # 0.5 seconds delay
+               ClientHandler.cleanup_client(sock)
+if __name__ == "__main__":
+   run(server)
+תפקידו להיות ממשק ידידותי לשמתמש כדי להריץ ולהתחל את השרת פונקצית run  מקשיבה לחיבורים נכנסים ומטפלת בנתקים של לקוחות ומסירה אותם מהרשימה ולקוחות חסומים
+server.py
+import socket
+import select
+import time
+from content_filter import ContentFilter
+from user_manager import UserManager
+from clientHandler import ClientHandler
+class Server:
+   def __init__(self,HOST = '127.0.0.1',PORT = 12345,user_manager=None,filter=None,hendler=None):
+       self.HOST =HOST
+       self.PORT = PORT
+       self.attach(user_manager,filter,hendler)
+   def attach(self,user_manager,filter,hendler):
+       self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+       self.server_socket.bind((self.HOST, self.PORT))
+       self.server_socket.listen()
+       print(f"Server started on {self.HOST}:{self.PORT}")
+
+
+       self.user_manager = user_manager if user_manager else UserManager()
+       self.filter = filter if filter else ContentFilter()
+       self.hendler = hendler if hendler else ClientHandler(self.server_socket)
+
+
+       # Stores sockets flagged for delayed kick: {socket: timestamp_sent_message}
+       self.users_to_kick = {}
+
+
+
+
+
+
+   def hander_msg(self,header,message,ip,hendler,notified_socket):
+       if header == 1:
+           if self.filter.is_message_clean(message):
+               hendler.clients[notified_socket]["username"] = message
+               hendler.clients[notified_socket]["ip"] = ip
+               hendler.broadcast(notified_socket, f"[SYSTEM] {message} username had joined")
+           else:
+               hendler.broadcast(notified_socket, f"[SYSTEM] {message} username is not Valid please pick another username")
+               hendler.clients[notified_socket]["username"] = "john doe"
+
+
+
+
+       elif header == 2:
+           hendler.broadcast(notified_socket, f"[SYSTEM] {hendler.clients[notified_socket]['username']} has changed its name to {message}")
+           hendler.clients[notified_socket]["username"] = message
+       else:
+           username = hendler.clients[notified_socket]["username"]
+           if self.filter.is_message_clean(message):
+               hendler.broadcast(notified_socket, f"{username}: {message}")
+           else:
+               ip = hendler.clients[notified_socket]["ip"]
+               kick, violations = self.user_manager.report_offense(username, ip)
+               if kick:
+                   try:
+                       notified_socket.send("[SYSTEM] You have been removed for inappropriate behavior.".encode())
+                       self.users_to_kick[notified_socket] = time.time()
+                       return notified_socket
+                   except:
+                       hendler.cleanup_client(notified_socket)
+               else:
+                   try:
+                       notified_socket.send(
+                           f"[WARNING] You have {violations} violations, extensive violations will cause ban.".encode())
+                   except:
+                       pass
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+מחלקת השרת יוצרת Socket לקבלת חיבורי לקוחות, שומרת רשימה של לקוחות מחוברים ,למשל, מילון עם שם משתמש, attact מגדירה את האוביקתים שיש לשרת: פילטר, מנהל המשתמשים ומנהל התקשורת פונקצית hander_msg מתפלת ב3 מצבי התקשורת : אתחול שם, שינוי שם והודעה רגילה 
+
+
+content_filter.py
+
+
+
+
+
+
+import os
+try:
+   import google.generativeai as genai
+   Genai_AVAILABLE = True
+except ImportError:
+   Genai_AVAILABLE = False
+   print("Gemini is not available make sure to install requirements.txt")
+
+
+try:
+   from transformers import pipeline
+   NLP_AVAILABLE = True
+except ImportError:
+   NLP_AVAILABLE = False
+   print("NLP is not available make sure to install environment.yml")
+
+
+class ContentFilter:
+   def __init__(self,UseGenai=False,UseNLP=False):
+       self.UseNLP = UseNLP if NLP_AVAILABLE else False
+       self.UseGenai = UseGenai if Genai_AVAILABLE else False
+
+
+       if self.UseGenai:
+           api_key = os.getenv("MY_API_KEY")
+           genai.configure(api_key=api_key)
+           self.model = genai.GenerativeModel("gemini-1.5-flash")
+       if self.UseNLP:
+           self.moderator = pipeline(
+               "text-classification",
+               model="unitary/toxic-bert",   # fine-tuned BERT for toxicity
+               return_all_scores=True
+           )
+       self.bad_words = {"קללה", "****", "טיפש", "מטומטם","nigga","fuck","ass","nigger"}
+
+
+   def nlp_moderate_text(self, message: str, threshold: float = 0.5) -> dict:
+       """
+       NLP-based moderation using Hugging Face toxic-bert model.
+       Returns category scores and safe/unsafe flag.
+       """
+       results = self.moderator(message)[0]
+
+
+       flags = {}
+       unsafe = False
+
+
+       for res in results:
+           label = res["label"].lower()
+           score = res["score"]
+           flags[label] = round(score, 3)
+
+
+           if score >= threshold and label != "neutral":
+               unsafe = True
+
+
+       return {
+           "text": message,
+           "scores": flags,
+           "safe": not unsafe
+       }
+   def is_message_clean(self, message):
+
+
+       if message in self.bad_words:
+           return False
+       if self.UseNLP:
+           if self.nlp_moderate_text(message):
+               return False
+       if self.UseGenai:
+           try:
+               response = self.model.generate_content(
+                   f"Is this message inappropriate, offensive, or toxic? '{message}' Answer only yes or no."
+               )
+
+
+               return "no" in response.text.lower()
+           except Exception as e:
+               print(f"Gemini error: {e}")
+               return True  # Fallback to allow message if Gemini fails
+       return True
+תפקידה לסננן הודעות בלתי הולמות בעזרת NLP, Gemini ו מילות של מילים בלתי הולמות הגדרת ה API של Gemini  דרך משתנה סביבה בשם MY_API_KEY
+
+
+clientHandler.py
+
+
+
+
+
+
+class ClientHandler:
+   def __init__(self,server_socket):
+       self.clients = {}
+       self.sockets_list = [server_socket]
+
+
+   def broadcast(self,sender_socket, message):
+       for client_socket in self.clients:
+           # if client_socket != sender_socket:
+               try:
+                   client_socket.send(message.encode())
+               except:
+                   ClientHandler.cleanup_client(client_socket)
+
+
+   def cleanup_client(self,client_socket):
+       if client_socket in self.sockets_list:
+           self.sockets_list.remove(client_socket)
+       if client_socket in self.clients:
+           del self.clients[client_socket]
+       if client_socket in self.users_to_kick:
+           del self.users_to_kick[client_socket]
+       try:
+           client_socket.close()
+       except:
+           pass
+
+
+   def receive_message(self,sock):
+       msg_type = sock.recv(1)
+       if not msg_type:
+           self.cleanup_client(sock)
+           return None
+
+
+       msg_type = msg_type[0]  # convert from bytes to int
+
+
+       # 4 bytes message length (ascii)
+       length_str = sock.recv(4).decode("ascii")
+       length = int(length_str)
+
+
+       # N bytes message body
+       body = b""
+       while len(body) < length:
+           chunk = sock.recv(length - len(body))
+           if not chunk:
+               break
+           body += chunk
+
+
+       return msg_type, body.decode("utf-8")
+
+
+User_manager.py
+
+
+class UserManager:
+   def __init__(self):
+       self.offenders = {}     # username → count
+       self.banned_ips = set() # permanently banned IPs
+       self.tolerateMax = 3
+
+
+   def report_offense(self, username, ip):
+       self.offenders[username] = self.offenders.get(username, 0) + 1
+       if self.offenders[username] >= self.tolerateMax:
+           self.banned_ips.add(ip)
+           return True, self.offenders[username]  # should be kicked
+       return False, self.offenders[username]
+
+
+   def is_banned(self, ip):
+       return ip in self.banned_ips
+
+
+מקבלת הודעות מהלקוח, מפענחת הודעות, מנהלת את סגירת החיבור כאשר הלקוח מתנתק או נחסם או חסום
+
+
+UserManager.py
+class UserManager:
+   def __init__(self):
+       self.offenders = {}     # username → count
+       self.banned_ips = set() # permanently banned IPs
+       self.tolerateMax = 3
+
+
+   def report_offense(self, username, ip):
+       self.offenders[username] = self.offenders.get(username, 0) + 1
+       if self.offenders[username] >= self.tolerateMax:
+           self.banned_ips.add(ip)
+           return True, self.offenders[username]  # should be kicked
+       return False, self.offenders[username]
+
+
+   def is_banned(self, ip):
+       return ip in self.banned_ips
+
+
+
+
+UserManager .4
+תפקיד: ניהול משתמשים מחוברים ומסוכנים.
+כגון שליחת הודעות לא תקינות.
+- מפעילה התרעה כאשר משתמש מגיע לסף עבירות ,למשל, 3 הודעות פוגעניות.
+חשיבות: מבטיחה סביבה בטוחה על ידי זיהוי וטיפול במשתמשים בעייתיים.
+
+
+ui.py
+
+
+import tkinter as tk
+from tkinter.scrolledtext import ScrolledText
+import threading
+
+
+class ChatUI:
+   def __init__(self, client):
+       self.client = client
+       self.root = tk.Tk()
+       self.root.title("Clean Chat")
+
+
+       self.username_set = False
+
+
+       tk.Label(self.root, text="user name:").pack()
+       self.username_entry = tk.Entry(self.root)
+       self.username_entry.pack()
+       self.username_entry.focus_set()
+
+
+       # One-time "Set username" button
+       self.set_username_button = tk.Button(self.root, text="Set username", command=self.set_username)
+       self.set_username_button.pack(pady=(2, 6))
+       self.username_entry.bind("<Return>", lambda e: self.set_username())
+
+
+       self.chat_display = ScrolledText(self.root, state='disabled')
+       self.chat_display.pack(fill='both', expand=True)
+
+
+       # Define color tags
+       self.chat_display.tag_config("user", foreground="blue")
+       self.chat_display.tag_config("system", foreground="black")
+       self.chat_display.tag_config("warning", foreground="red")
+
+
+       # Message entry starts disabled until username is set
+       self.message_entry = tk.Entry(self.root, state='disabled')
+       self.message_entry.pack(fill='x')
+       self.message_entry.bind("<Return>", self.send_message)
+
+
+       # Send button exists but is NOT packed until username is set
+       self.send_button = tk.Button(self.root, text="שלח", command=self.send_message)
+
+
+       self.root.after(100, self.check_messages)
+
+
+   def start(self):
+       self.root.mainloop()
+
+
+   def check_messages(self):
+       while not self.client.message_queue.empty():
+           msg = self.client.message_queue.get()
+           self.display_message(msg)
+       self.root.after(100, self.check_messages)
+
+
+   def set_username(self):
+       username = self.username_entry.get().strip()
+       if not username:
+           self.display_message("[SYSTEM] Please enter a non-empty username.")
+           return
+
+
+
+
+
+
+       if not self.username_set:
+           # Header "1" means 'set name'
+           msg_type = 1
+           # First time setup
+           self.username_set = True
+           self.message_entry.config(state='normal')
+           self.send_button.pack(pady=6)
+           self.message_entry.focus_set()
+           # self.display_message(f"[SYSTEM] Username set as '{username}'. You can now chat.")
+
+
+           # Change button text to "Change username"
+           self.set_username_button.config(text="Change username", state="normal")
+           self.username_entry.config(state='normal')  # keep editable
+       else:
+           # Header "2" means 'change name'
+           msg_type = 2
+       self.client.send(username,msg_type)
+
+
+   def send_message(self, event=None):
+       if not self.username_set:
+           self.display_message("[SYSTEM] Set your username first. It will be sent as your first message.")
+           return
+
+
+       msg = self.message_entry.get().strip()
+       if msg:
+           self.client.send(msg,0)
+           self.message_entry.delete(0, tk.END)
+
+
+   def display_message(self, msg):
+       self.chat_display.config(state='normal')
+
+
+       if msg.startswith("[SYSTEM]"):
+           tag = "system"
+       elif msg.startswith("[WARNING]"):
+           tag = "warning"
+       else:
+           tag = "user"
+
+
+       self.chat_display.insert(tk.END, msg + "\n", tag)
+       self.chat_display.config(state='disabled')
+       self.chat_display.yview(tk.END)
+תפקיד: ניהול ממשק המשתמש הגרפי של הלקוח.
+
+
+- פעולות:
+- יצירת חלון גרפי באמצעות Tkinter הכולל:
+- שדה להזנת שם משתמש.
+- אזור תצוגת הודעות )ScrolledText)המתעדכן line-on
+- שדה קלט לשליחת הודעות
+- כפתור בחירת או שנוי שם תמיכה בשליחה באמצעות Enter
+- כפתור שליחה או תמיכה בשליחה באמצעות Enter 
+- מציגה הודעות נכנסות והתרעות, למשל "הודעה נחסמה" או "מסולקת מהצ'אט".
+.
+חשיבות: מספקת ממשק ידידותי ונוח לשימוש עבור המשתמשים.
+ 
+client.py
+
+
+import socket
+import threading
+import queue
+from ui import ChatUI
+
+
+class Client:
+   def __init__(self, host='127.0.0.1', port=12345):
+       self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+       self.sock.connect((host, port))
+       self.message_queue = queue.Queue()
+
+
+   def send(self, message,msg_type):
+       body_bytes = message.encode("utf-8")
+       length_str = f"{len(body_bytes):04d}"  # 4 ASCII digits
+       packet = bytes([msg_type]) + length_str.encode("ascii") + body_bytes
+       self.sock.sendall(packet)
+
+
+   def receive_loop(self):
+       while True:
+           try:
+               message = self.sock.recv(1024).decode()
+               self.message_queue.put(message)
+           except:
+               break
+
+
+   def run(self):
+       ui = ChatUI(self)
+       # username = None
+       # while not username:
+       #     username = input("Enter username: ").strip()
+       # self.send(username)
+
+
+       threading.Thread(target=self.receive_loop, daemon=True).start()
+       ui.start()
+
+
+if __name__ == "__main__":
+   client = Client()
+   client.run()
