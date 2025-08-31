@@ -18,7 +18,7 @@ def run(scene,speed=1,gizmos=False,scriptRefreshRate=60,tick=1/60):
     startg = time.time()
     FPS = 1
     if gizmos:
-        hit_points = [Object(size=(0.1,0.1,0.1),children=[Object(size=(0.1,0.1,0.1)) for i in range(8)]) for i in range(8)]
+        hit_points = [Object(size=(0.1,0.1,0.1),position=(100,100,100),children=[Object(size=(0.1,0.1,0.1),position=(100,100,100)) for i in range(8)]) for i in range(8)]
         gizmos_container = Object(size=(0,0,0),children=hit_points)
         world = Object(position=(0, 0, 0), size=(0, 0, 0), children=[scene,gizmos_container], name='world')
 

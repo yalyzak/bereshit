@@ -65,23 +65,24 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.ui_elements = []
         self.prog = self.ctx.program(
             vertex_shader='''
-            #version 330
-            uniform mat4 model;
-            uniform mat4 view;
-            uniform mat4 projection;
-            in vec3 in_position;
-            void main() {
-                gl_Position = projection * view * model * vec4(in_position, 1.0);
-            }
-            ''',
+                      #version 330
+                      uniform mat4 model;
+                      uniform mat4 view;
+                      uniform mat4 projection;
+                      in vec3 in_position;
+                      void main() {
+                          gl_Position = projection * view * model * vec4(in_position, 1.0);
+                      }
+                      ''',
             fragment_shader='''
-            #version 330
-            out vec4 f_color;
-            uniform vec3 color;
-            void main() {
-                f_color = vec4(color, 1.0);
-            }
-            '''
+                      #version 330
+                      out vec4 f_color;
+                      uniform vec3 color;
+                      void main() {
+                          f_color = vec4(color, 1.0);
+                      }
+                      '''
+
         )
 
         self.view = Matrix44.identity()
@@ -94,6 +95,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         shading = self.cam.shading
         if shading == "wire":
             for obj in [self.root_object] + self.root_object.get_all_children_bereshit():
+
                 if obj.Mesh is None or obj.Mesh.vertices == []:
                     continue
 
@@ -128,22 +130,24 @@ class BereshitRenderer(moderngl_window.WindowConfig):
 
                 # Build triangle vertex list
                 triangles = []
-                for tri in obj.Mesh.triangles:  # tri = (i, j, k)
-                    for index in tri:
-                        triangles.extend(verts[index])  # flatten x, y, z into list
+                if obj.Mesh.triangles:
+                    for tri in obj.Mesh.triangles:  # tri = (i, j, k)
+                        for index in tri:
+                            triangles.extend(verts[index])  # flatten x, y, z into list
 
-                vbo = np.array(triangles, dtype='f4')
-                vao_buffer = self.ctx.buffer(vbo.tobytes())
-
-                self.meshes.append({
-                    'obj': obj,
-                    'vbo': vao_buffer,
-                    'vao': self.ctx.vertex_array(
+                    vbo = np.array(triangles, dtype='f4')
+                    vao_buffer = self.ctx.buffer(vbo.tobytes())
+                    vao = self.ctx.vertex_array(
                         self.prog,
-                        [(vao_buffer, '3f', 'in_position')],
-                    ),
-                    'len': len(triangles),
-                })
+                        [(vao_buffer, "3f", "aPos")]  # only position
+                    )
+
+                    self.meshes.append({
+                        'obj': obj,
+                        'vbo': vao_buffer,
+                        'vao': vao,
+                        'len': len(triangles),
+                    })
 
     def prepare_mesh_for_object(self, obj):
         """Build a mesh for a single object (based on current shading) and add/replace it in self.meshes."""
@@ -306,7 +310,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
             obj_rot_matrix = Matrix44.from_quaternion(pyrr_obj_q)
 
             model = (
-                    Matrix44.from_scale(size * 0.5)
+                    Matrix44.from_scale(size*0.5)
                     @ Matrix44.from_quaternion(PyrrQuat([rot.x, rot.y, rot.z, rot.w]))
                     @ Matrix44.from_translation(pos)
             )
@@ -314,6 +318,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
             self.prog['model'].write(model.astype('f4').tobytes())
             self.prog['view'].write(self.view.astype('f4').tobytes())
             self.prog['projection'].write(self.projection.astype('f4').tobytes())
+            # self.prog['lightPos'].value = cam_pos  # your light source coordinates
 
             color = obj.material.color if hasattr(obj.material, 'color') else (1.0, 1.0, 1.0)
             self.prog['color'].value = color
