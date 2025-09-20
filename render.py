@@ -65,23 +65,24 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.ui_elements = []
         self.prog = self.ctx.program(
             vertex_shader='''
-            #version 330
-            uniform mat4 model;
-            uniform mat4 view;
-            uniform mat4 projection;
-            in vec3 in_position;
-            void main() {
-                gl_Position = projection * view * model * vec4(in_position, 1.0);
-            }
-            ''',
+                      #version 330
+                      uniform mat4 model;
+                      uniform mat4 view;
+                      uniform mat4 projection;
+                      in vec3 in_position;
+                      void main() {
+                          gl_Position = projection * view * model * vec4(in_position, 1.0);
+                      }
+                      ''',
             fragment_shader='''
-            #version 330
-            out vec4 f_color;
-            uniform vec3 color;
-            void main() {
-                f_color = vec4(color, 1.0);
-            }
-            '''
+                      #version 330
+                      out vec4 f_color;
+                      uniform vec3 color;
+                      void main() {
+                          f_color = vec4(color, 1.0);
+                      }
+                      '''
+
         )
 
         self.view = Matrix44.identity()
@@ -94,6 +95,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         shading = self.cam.shading
         if shading == "wire":
             for obj in [self.root_object] + self.root_object.get_all_children_bereshit():
+
                 if obj.Mesh is None or obj.Mesh.vertices == []:
                     continue
 
@@ -128,105 +130,84 @@ class BereshitRenderer(moderngl_window.WindowConfig):
 
                 # Build triangle vertex list
                 triangles = []
-                for tri in obj.Mesh.triangles:  # tri = (i, j, k)
-                    for index in tri:
-                        triangles.extend(verts[index])  # flatten x, y, z into list
+                if obj.Mesh.triangles:
+                    for tri in obj.Mesh.triangles:  # tri = (i, j, k)
+                        for index in tri:
+                            triangles.extend(verts[index])  # flatten x, y, z into list
 
-                vbo = np.array(triangles, dtype='f4')
-                vao_buffer = self.ctx.buffer(vbo.tobytes())
+                    vbo = np.array(triangles, dtype='f4')
+                    vao_buffer = self.ctx.buffer(vbo.tobytes())
+                    vao = self.ctx.vertex_array(
+                        self.prog,
+                        [(vao_buffer, "3f", "aPos")]  # only position
+                    )
 
+                    self.meshes.append({
+                        'obj': obj,
+                        'vbo': vao_buffer,
+                        'vao': vao,
+                        'len': len(triangles),
+                    })
+
+    def prepare_missing_meshes(self,missing):
+        shading = self.cam.shading
+        if shading == "wire":
+            for obj in missing:
+                if obj.Mesh is None or obj.Mesh.vertices == []:
+                    continue
+
+                # Convert vertices to numpy
+                # verts = [(v * obj.size * 0.5).to_np() for v in
+                #          obj.Mesh.vertices]  # Ensure this returns list or np.array of floats
+                verts = [v.to_np() for v in obj.Mesh.vertices]  # no size, no 0.5
+
+                lines = []
+                for i, j in obj.Mesh.edges:
+                    lines.extend(verts[i])  # 👈 flatten the vector into x, y, z
+                    lines.extend(verts[j])
+
+                vbo = np.array(lines, dtype='f4')
+                vao = self.ctx.buffer(vbo.tobytes())
                 self.meshes.append({
                     'obj': obj,
-                    'vbo': vao_buffer,
+                    'vbo': vao,
                     'vao': self.ctx.vertex_array(
                         self.prog,
-                        [(vao_buffer, '3f', 'in_position')],
+                        [(vao, '3f', 'in_position')],
                     ),
-                    'len': len(triangles),
+                    'len': len(lines),
                 })
+        if shading == "solid":
+            for obj in missing:
+                if obj.Mesh is None:
+                    continue
 
-    def prepare_mesh_for_object(self, obj):
-        """Build a mesh for a single object (based on current shading) and add/replace it in self.meshes."""
-        shading = getattr(self.cam, "shading", "wire")
+                # Convert vertices to numpy (scaled and centered)
+                verts = [(v * obj.size * 0.5).to_np() for v in obj.Mesh.vertices]
 
-        # Basic sanity checks
-        if obj is None or getattr(obj, "Mesh", None) is None:
-            return None
+                # Build triangle vertex list
+                triangles = []
+                if obj.Mesh.triangles:
+                    for tri in obj.Mesh.triangles:  # tri = (i, j, k)
+                        for index in tri:
+                            triangles.extend(verts[index])  # flatten x, y, z into list
 
-        # Convert vertices to numpy (scaled and centered)
-        verts = getattr(obj.Mesh, "vertices", None)
-        if not verts:  # empty list or None
-            return None
+                    vbo = np.array(triangles, dtype='f4')
+                    vao_buffer = self.ctx.buffer(vbo.tobytes())
+                    vao = self.ctx.vertex_array(
+                        self.prog,
+                        [(vao_buffer, "3f", "aPos")]  # only position
+                    )
 
-        scaled = [(v * obj.size * 0.5).to_np() for v in verts]  # each -> np.array([x,y,z], dtype=float)
+                    self.meshes.append({
+                        'obj': obj,
+                        'vbo': vao_buffer,
+                        'vao': vao,
+                        'len': len(triangles),
+                    })
 
-        mesh_record = None
-        if shading == "wire":
-            edges = getattr(obj.Mesh, "edges", None)
-            if not edges:
-                return None
-
-            flat = []
-            for i, j in edges:
-                flat.extend(scaled[i])  # x,y,z for vertex i
-                flat.extend(scaled[j])  # x,y,z for vertex j
-
-            vbo = np.array(flat, dtype="f4")
-            buf = self.ctx.buffer(vbo.tobytes())
-
-            mesh_record = {
-                "obj": obj,
-                "vbo": buf,
-                "vao": self.ctx.vertex_array(
-                    self.prog,
-                    [(buf, "3f", "in_position")],
-                ),
-                "len": len(flat),  # number of floats (== 3 * vertex_count)
-                "mode": moderngl.LINES if hasattr(moderngl, "LINES") else None,
-            }
-
-        elif shading == "solid":
-            triangles = getattr(obj.Mesh, "triangles", None)
-            if not triangles:
-                return None
-
-            flat = []
-            for tri in triangles:  # tri is a tuple/list of 3 indices
-                for idx in tri:
-                    flat.extend(scaled[idx])  # x,y,z
-
-            vbo = np.array(flat, dtype="f4")
-            buf = self.ctx.buffer(vbo.tobytes())
-
-            mesh_record = {
-                "obj": obj,
-                "vbo": buf,
-                "vao": self.ctx.vertex_array(
-                    self.prog,
-                    [(buf, "3f", "in_position")],
-                ),
-                "len": len(flat),  # number of floats (== 3 * vertex_count)
-                "mode": moderngl.TRIANGLES if hasattr(moderngl, "TRIANGLES") else None,
-            }
-
-        else:
-            return None  # unknown shading
-
-        # Replace existing mesh for this object if it exists (avoid duplicates)
-        for i, rec in enumerate(self.meshes):
-            if rec.get("obj") is obj:
-                # Delete GPU buffers for the old record if desired:
-                try:
-                    rec["vbo"].release()
-                    rec["vao"].release()
-                except Exception:
-                    pass
-                self.meshes[i] = mesh_record
-                return mesh_record
-
-        # Otherwise append
-        self.meshes.append(mesh_record)
-        return mesh_record
+    def cleanup_removed_meshes(self, removed_objs):
+        self.meshes = [m for m in self.meshes if m['obj'] not in removed_objs]
 
     def resize(self, width: int, height: int):
         self.projection = Matrix44.perspective_projection(self.fov, self.wnd.aspect_ratio, 0.1, 1000.0)
@@ -266,6 +247,29 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.ui_elements.append(vertices)
 
     def on_render(self, time: float, frametime: float):
+        # collect all scene objects (root + children)
+        scene_objs = [self.root_object] + self.root_object.get_all_children_bereshit()
+
+        # ignore the camera (and any other special objs)
+        skip_objs = {self.camera_obj}
+        scene_objs = [obj for obj in scene_objs if obj not in skip_objs]
+
+        # objects we already have meshes for
+        existing_objs = [m['obj'] for m in self.meshes]
+
+        # objects missing a mesh
+        missing = [obj for obj in scene_objs if obj not in existing_objs]
+
+        # objects no longer in the scene
+        removed = [obj for obj in existing_objs if obj not in scene_objs]
+
+        # prepare meshes for new ones
+        if missing:
+            self.prepare_missing_meshes(missing)
+
+        # cleanup old meshes
+        if removed:
+            self.cleanup_removed_meshes(removed)  # you'd implement this
 
         shading = self.cam.shading
 
@@ -303,10 +307,10 @@ class BereshitRenderer(moderngl_window.WindowConfig):
 
             # Use object's rotation
             pyrr_obj_q = PyrrQuat([rot.x, rot.y, rot.z, rot.w])
-            obj_rot_matrix = Matrix44.from_quaternion(pyrr_obj_q)
+            # obj_rot_matrix = Matrix44.from_quaternion(pyrr_obj_q)
 
             model = (
-                    Matrix44.from_scale(size * 0.5)
+                    Matrix44.from_scale(size*0.5)
                     @ Matrix44.from_quaternion(PyrrQuat([rot.x, rot.y, rot.z, rot.w]))
                     @ Matrix44.from_translation(pos)
             )
@@ -314,6 +318,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
             self.prog['model'].write(model.astype('f4').tobytes())
             self.prog['view'].write(self.view.astype('f4').tobytes())
             self.prog['projection'].write(self.projection.astype('f4').tobytes())
+            # self.prog['lightPos'].value = cam_pos  # your light source coordinates
 
             color = obj.material.color if hasattr(obj.material, 'color') else (1.0, 1.0, 1.0)
             self.prog['color'].value = color
@@ -337,4 +342,3 @@ class BereshitRenderer(moderngl_window.WindowConfig):
 def run_renderer(root_object):
     BereshitRenderer.root_object = root_object  # 👈 inject your object here
     moderngl_window.run_window_config(BereshitRenderer, args=['--window', 'glfw'])
-
