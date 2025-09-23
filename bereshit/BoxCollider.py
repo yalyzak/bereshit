@@ -576,7 +576,7 @@ class BoxCollider:
             #     collision_axis = axis
             #     collision_type = source
             #     collision_axis_indices = indices
-        print(source)
+        # print(source)
         if collision_type in ("a", "b"):
             if collision_type == "a":
                 ref_center, ref_axes, ref_half = a_center, a_axes, a_half_sizes

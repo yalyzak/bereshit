@@ -20,6 +20,8 @@ class Client:
         self.outgoing.append(msg)
 
     def Update(self, dt=None):
+        msgs = self.get_messages()
+        print(msgs)
         """Called automatically each physics tick."""
 
         # --- prepare data from objects ---
