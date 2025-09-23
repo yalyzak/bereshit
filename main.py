@@ -43,7 +43,7 @@ camera.add_component(BoxCollider())
 camera.add_component(rotate())
 camera.add_component(Shoot())
 stack[0].add_component(debug(floor))
-camera.add_component(Client("127.0.0.1", 5000, data_objects=[floor]))
+camera.add_component(Client("192.168.1.17", 5000, data_objects=[floor]))
 
 # scene with stacked objects
 scene = Object(
