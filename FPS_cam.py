@@ -3,7 +3,7 @@ import math
 import mouse
 
 import bereshit
-from bereshit import Quaternion,Vector3,Mesh_rander,rotate_vector_old
+from bereshit import Quaternion,Vector3,MeshRander
 
 CENTER_X = 960
 CENTER_Y = 540
@@ -13,15 +13,15 @@ class rotate:
         self.total_pitch = 0.0
         self.total_yaw = 0.0
 
-    def s(self):
+    def s(self,dt):
         x, y = mouse.get_position()
 
         dx = x - CENTER_X
         dy = y - CENTER_Y
 
-        sensitivity = 0.002
-        self.total_yaw += -dx * sensitivity
-        self.total_pitch += dy * sensitivity
+        sensitivity = 0.1
+        self.total_yaw -= dx * sensitivity * dt
+        self.total_pitch += dy * sensitivity * dt
         max_yaw = math.radians(90)
         min_yaw = math.radians(-90)
 
@@ -39,10 +39,10 @@ class rotate:
         # self.parent.quaternion *= Quaternion.euler(Vector3(0.001,0,0))
         mouse.move(CENTER_X, CENTER_Y)
 
-    def Update(self):
+    def Update(self,dt):
         # self.parent.quaternion *= Quaternion.euler(Vector3(0.001,0,0))
         # Get current rotation
-        self.s()
+        self.s(dt)
 
         # Save
         # self.parent.quaternion = self.parent.quaternion.normalized()

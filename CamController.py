@@ -1,14 +1,11 @@
 import time
-
 import keyboard
-import Core
-from bereshit import Vector3,rotate_vector_quaternion, euler_to_quaternion
-from bereshit import Quaternion
+from bereshit import Vector3
 
 class CamController:
-    def __init__(self,speed=5):
+    def __init__(self,speed=5,speed2=15):
         self.force_amount = speed
-        self.force_amount2 = speed
+        self.force_amount2 = speed2
 
     def keyboard_controller(self,dt):
         if keyboard.is_pressed('esc'):
@@ -31,31 +28,32 @@ class CamController:
             print("Continuing...")
 
         if keyboard.is_pressed('w'):
-            forward = rotate_vector_quaternion(Vector3(0, 0, 1), self.parent.quaternion)
+            forward = self.parent.quaternion.rotate(Vector3(0, 0, 1))
             # flatten to XZ plane
             forward = Vector3(forward.x, 0, forward.z).normalized() * self.force_amount
-            self.parent.position += forward * dt
+            self.parent.Rigidbody.velocity += forward * dt
+
 
         if keyboard.is_pressed('s'):
-            backward = rotate_vector_quaternion(Vector3(0, 0, -1), self.parent.quaternion)
+            backward = self.parent.quaternion.rotate(Vector3(0, 0, -1))
             backward = Vector3(backward.x, 0, backward.z).normalized() * self.force_amount
-            self.parent.position += backward * dt
+            self.parent.Rigidbody.velocity += backward * dt
 
         if keyboard.is_pressed('a'):
-            right = rotate_vector_quaternion(Vector3(1, 0, 0), self.parent.quaternion)
+            right = self.parent.quaternion.rotate(Vector3(1, 0, 0))
             right = Vector3(right.x, 0, right.z).normalized() * self.force_amount
-            self.parent.position += right * dt
+            self.parent.Rigidbody.velocity += right * dt
 
         if keyboard.is_pressed('d'):
-            left = rotate_vector_quaternion(Vector3(-1, 0, 0), self.parent.quaternion)
+            left = self.parent.quaternion.rotate(Vector3(-1, 0, 0))
             left = Vector3(left.x, 0, left.z).normalized() * self.force_amount
-            self.parent.position += left * dt
+            self.parent.Rigidbody.velocity += left * dt
 
         if keyboard.is_pressed('space'):
-            self.parent.position += Vector3(0, self.force_amount2, 0) * dt
+            self.parent.Rigidbody.velocity += Vector3(0, self.force_amount2, 0) * dt
 
         if keyboard.is_pressed('left shift'):
-            self.parent.position += Vector3(0, -self.force_amount2, 0) * dt
+            self.parent.Rigidbody.velocity += Vector3(0, -self.force_amount2, 0) * dt
 
     def Update(self,dt):
         self.keyboard_controller(dt)

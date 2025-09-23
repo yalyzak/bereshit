@@ -1,4 +1,4 @@
-from bereshit import Object,Camera,Vector3, Rigidbody, BoxCollider, Mesh_rander, FixJoint,Quaternion,rotate_vector_quaternion
+from bereshit import Object,Camera,Vector3, Rigidbody, BoxCollider, MeshRander ,Quaternion
 import mouse  # pip install mouse
 import copy
 class Shoot:
@@ -10,10 +10,10 @@ class Shoot:
     def onClick(self):
         # print("g")
         boolet = Object(position=copy.deepcopy(self.parent.position),name="boolet")
-        forward = rotate_vector_quaternion(Vector3(0,0,1), self.parent.quaternion) * self.speed
+        forward = self.parent.quaternion.rotate(Vector3(0,0,1))
         boolet.add_component(BoxCollider())
         boolet.add_component(Rigidbody(
-            velocity=(forward * 10),
+            velocity=(forward * self.speed),
             useGravity=False,
             mass=100
         ))
