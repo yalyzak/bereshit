@@ -1,5 +1,7 @@
 import socket
+import struct
 from collections import deque
+from bereshit import World, Object, Rigidbody, BoxCollider, Vector3
 
 class Client:
     def __init__(self, host, port, data_objects=None):
@@ -12,29 +14,46 @@ class Client:
         self.data_objects = data_objects or []
 
         # message buffers
-        self.incoming = deque()
-        self.outgoing = deque()
+        self.incoming = deque()   # stores raw bytes
+        self.outgoing = deque()   # stores raw bytes
 
-    def send_data(self, msg: str):
-        """Queue a raw message to send."""
+        self.Continer = None
+
+    def Start(self):
+        cube = Object()
+        cube.add_component(BoxCollider())
+        cube.add_component(Rigidbody(useGravity=False))
+        ServerContiner = Object(children=[cube])
+        self.parent.world.add_child(ServerContiner)
+        self.Continer = ServerContiner
+
+    def send_data(self, msg: bytes):
+        """Queue a raw binary message to send."""
         self.outgoing.append(msg)
 
     def Update(self, dt=None):
+        # --- parse any received messages ---
         msgs = self.get_messages()
-        print(msgs)
-        """Called automatically each physics tick."""
+        for m in msgs:
+            # print("Name:", m["name"])
+            # print("Position:", m["position"])
+            self.Continer.children[0].position = Vector3(m["position"])
 
-        # --- prepare data from objects ---
+        # --- prepare and queue outgoing data ---
         for obj in self.data_objects:
-            # Example: send object name + position
-            msg = f"{obj.name}:{obj.position.x},{obj.position.y},{obj.position.z}"
+            name_bytes = obj.name.encode()
+            msg = struct.pack(
+                f"!I{len(name_bytes)}sfff",
+                len(name_bytes), name_bytes,
+                obj.position.x, obj.position.y, obj.position.z
+            )
             self.outgoing.append(msg)
 
         # --- send outgoing ---
         try:
             while self.outgoing:
                 msg = self.outgoing.popleft()
-                self.sock.send(msg.encode())
+                self.sock.send(msg)
         except BlockingIOError:
             # socket buffer full, keep message
             self.outgoing.appendleft(msg)
@@ -43,12 +62,27 @@ class Client:
         try:
             data = self.sock.recv(1024)
             if data:
-                self.incoming.append(data.decode())
+                # store raw binary, not decoded string
+                self.incoming.append(data)
         except BlockingIOError:
             pass  # nothing to read
 
     def get_messages(self):
-        """Retrieve and clear all received messages this frame."""
-        msgs = list(self.incoming)
-        self.incoming.clear()
-        return msgs
+        """Retrieve and decode all received messages this frame."""
+        decoded = []
+        while self.incoming:
+            m = self.incoming.popleft()
+
+            # first 4 bytes = name length
+            name_len = struct.unpack("!I", m[:4])[0]
+
+            # rebuild format string
+            fmt = f"!I{name_len}sfff"
+            unpacked = struct.unpack(fmt, m)
+
+            _, name, x, y, z = unpacked
+            decoded.append({
+                "name": name.decode(),
+                "position": (x, y, z)
+            })
+        return decoded
