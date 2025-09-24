@@ -38,12 +38,12 @@ camera = Object(size=(1,1,1), position=(5,0,-5), name='camera')
 camera.add_component(Camera(shading="wire"))
 camera.add_component(MeshRander(shape="empty"))
 camera.add_component(CamController())
-camera.add_component(Rigidbody(isKinematic=False))
+camera.add_component(Rigidbody(useGravity=False))
 camera.add_component(BoxCollider())
 camera.add_component(rotate())
 camera.add_component(Shoot())
 stack[0].add_component(debug(floor))
-camera.add_component(Client("192.168.1.17", 5000, data_objects=[floor]))
+camera.add_component(Client("10.100.102.4", 5000, data_objects=[camera]))
 
 # scene with stacked objects
 scene = Object(

@@ -1,67 +1,36 @@
-import selectors
 import socket
 import struct
 
-sel = selectors.DefaultSelector()
-clients = {}  # conn -> address
+clients = set()
 
-def accept(sock):
-    conn, addr = sock.accept()
-    print("Accepted connection from", addr)
-    conn.setblocking(False)
-    clients[conn] = addr
-    sel.register(conn, selectors.EVENT_READ, read)
-
-def read(conn):
-    try:
-        data = conn.recv(1024)
-        if data:
-            # First 4 bytes tell us name length
-            name_len = struct.unpack("!I", data[:4])[0]
-            fmt = f"!I{name_len}sfff"
-            unpacked = struct.unpack(fmt, data)
-
-            _, name, x, y, z = unpacked
-            print(f"Received from {clients[conn]} -> Name: {name.decode()}, Position: ({x:.2f}, {y:.2f}, {z:.2f})")
-
-            # Echo to everyone except the sender
-            for other_conn in list(clients.keys()):
-                if other_conn is not conn:
-                    try:
-                        other_conn.sendall(data)
-                    except Exception:
-                        print(f"Error sending to {clients[other_conn]}")
-                        sel.unregister(other_conn)
-                        other_conn.close()
-                        del clients[other_conn]
-
-        else:
-            # Client closed connection
-            print(f"Closing connection {clients[conn]}")
-            sel.unregister(conn)
-            conn.close()
-            del clients[conn]
-
-    except ConnectionResetError:
-        print(f"Client reset connection {clients[conn]}")
-        sel.unregister(conn)
-        conn.close()
-        del clients[conn]
-
-
-# Create listening socket
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# Create UDP socket
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(("0.0.0.0", 5000))
-sock.listen()
-sock.setblocking(False)
 
-sel.register(sock, selectors.EVENT_READ, accept)
+print("UDP Server listening on port 5000...")
 
-print("Server listening on port 5000...")
-
-# Event loop
 while True:
-    events = sel.select(timeout=None)
-    for key, mask in events:
-        callback = key.data
-        callback(key.fileobj)
+    try:
+        data, addr = sock.recvfrom(1024)
+    except ConnectionResetError:
+        # Ignore ICMP "port unreachable" errors (Windows quirk)
+        continue
+
+    if addr not in clients:
+        clients.add(addr)
+        print("New client:", addr)
+
+    # Unpack message
+    name_len = struct.unpack("!I", data[:4])[0]
+    fmt = f"!I{name_len}sfff"
+    _, name, x, y, z = struct.unpack(fmt, data)
+
+    print(f"From {addr} -> Name: {name.decode()}, Pos: ({x:.2f}, {y:.2f}, {z:.2f})")
+
+    # Broadcast to all other clients
+    for other_addr in clients:
+        if other_addr != addr:
+            try:
+                sock.sendto(data, other_addr)
+            except Exception:
+                print(f"Error sending to {other_addr}")
