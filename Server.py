@@ -1,5 +1,6 @@
 import selectors
 import socket
+import struct
 
 sel = selectors.DefaultSelector()
 clients = {}  # conn -> address
@@ -15,8 +16,13 @@ def read(conn):
     try:
         data = conn.recv(1024)
         if data:
-            msg = data.decode()
-            print(f"Received from {clients[conn]}: {msg}")
+            # First 4 bytes tell us name length
+            name_len = struct.unpack("!I", data[:4])[0]
+            fmt = f"!I{name_len}sfff"
+            unpacked = struct.unpack(fmt, data)
+
+            _, name, x, y, z = unpacked
+            print(f"Received from {clients[conn]} -> Name: {name.decode()}, Position: ({x:.2f}, {y:.2f}, {z:.2f})")
 
             # Echo to everyone except the sender
             for other_conn in list(clients.keys()):
