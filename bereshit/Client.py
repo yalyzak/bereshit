@@ -5,10 +5,10 @@ from bereshit import World, Object, Rigidbody, BoxCollider, Vector3
 
 class Client:
     def __init__(self, host, port, data_objects=None):
-        # core socket setup
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect((host, port))
+        # --- core UDP socket setup ---
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setblocking(False)
+        self.server_addr = (host, port)
 
         # objects this client syncs
         self.data_objects = data_objects or []
@@ -35,9 +35,8 @@ class Client:
         # --- parse any received messages ---
         msgs = self.get_messages()
         for m in msgs:
-            # print("Name:", m["name"])
-            # print("Position:", m["position"])
-            self.Continer.children[0].position = Vector3(m["position"])
+            # Update container position
+            self.Continer.children[0].position = Vector3(*m["position"])
 
         # --- prepare and queue outgoing data ---
         for obj in self.data_objects:
@@ -53,16 +52,16 @@ class Client:
         try:
             while self.outgoing:
                 msg = self.outgoing.popleft()
-                self.sock.send(msg)
+                self.sock.sendto(msg, self.server_addr)
         except BlockingIOError:
             # socket buffer full, keep message
             self.outgoing.appendleft(msg)
 
         # --- receive incoming ---
         try:
-            data = self.sock.recv(1024)
+            data, _ = self.sock.recvfrom(1024)
             if data:
-                # store raw binary, not decoded string
+                # store raw binary
                 self.incoming.append(data)
         except BlockingIOError:
             pass  # nothing to read
