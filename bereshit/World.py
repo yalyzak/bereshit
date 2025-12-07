@@ -117,6 +117,7 @@ class World:
                     contacts.append(contacts2)
                 elif type(contact_points[0]) == Vector3:
                     contact_point, normal, penetration = contact_points
+
                     r1 = contact_point - rb1.parent.position
                     r2 = contact_point - rb2.parent.position
 

@@ -769,15 +769,14 @@ class BoxCollider:
                 #     collision_axis = axis
                 #     collision_type = source
                 #     collision_axis_indices = indices
-            direction = self.obj.position - other_collider.obj.position
-            if direction.dot(collision_axis) < 0:
-                collision_axis = -collision_axis
+
             return collision_axis, collision_type, collision_axis_indices
 
         result = SAT()
         if result is None:
             return None
         collision_axis, collision_type, collision_axis_indices = result
+
         hits = set()
         ver = other_collider.vertices()
         for i in range(len(ver)):
@@ -785,6 +784,9 @@ class BoxCollider:
             norm = np.linalg.norm(vector)
             hit = self.Raycast(ver[i], vector / norm, maxDistance=norm)
             if hit.point is not None:
+                V = Vector3(tuple(hit.point)) - self.parent.position # i think that maybe i need to add if collision_type == b then use self.other_collider.position
+                if V.dot(collision_axis) > 0:
+                    collision_axis = -collision_axis
                 hits.add((tuple(hit.point), collision_axis, 0))
         ver = self.vertices()
         for i in range(len(ver)):
@@ -792,6 +794,9 @@ class BoxCollider:
             norm = np.linalg.norm(vector)
             hit = other_collider.Raycast(ver[i], vector / norm, maxDistance=norm)
             if hit.point is not None:
+                V = Vector3(tuple(hit.point)) - self.parent.position
+                if V.dot(collision_axis) < 0:
+                    collision_axis = -collision_axis
                 hits.add((tuple(hit.point), -collision_axis, 0))
         # if hits == set():
         #     return None
