@@ -1,11 +1,8 @@
 import socket
-import struct
 from collections import deque
 from bereshit import World, Object, Rigidbody, BoxCollider, Vector3, Quaternion, MeshRander
 
 
-FORMAT = "fff ffff fff"      # pos(3), quat(4), vel(3)
-SIZE = struct.calcsize(FORMAT)
 
 players = {}  # { "username": Object() }
 
@@ -30,14 +27,13 @@ class Clientuse:
 
     def Send(self):
         for obj in self.data_objects:
-            msg = struct.pack(
-                "fff fff ffff",
+            msg = [
                 obj.position.x, obj.position.y, obj.position.z,
                 obj.quaternion.x, obj.quaternion.y, obj.quaternion.z, obj.quaternion.w,
 
                 obj.Rigidbody.velocity.x, obj.Rigidbody.velocity.y, obj.Rigidbody.velocity.z,
 
-            )
+            ]
             self.Broadcast(self.UserName,msg)
 
     def Update(self, dt):
