@@ -73,7 +73,7 @@ class Client:
     def Broadcast(self, UserName, message):
         """Send message to server's UDP broadcast system."""
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        values = struct.unpack("fff fff ffff", message)
+        values = message
 
         udp.sendto(json.dumps({
             "action": "broadcast",
@@ -97,4 +97,3 @@ if __name__ == "__main__":
     while True:
         msg = input()
         c.Broadcast("Yaly", msg)
-
