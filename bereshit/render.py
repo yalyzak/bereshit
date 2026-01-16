@@ -3,6 +3,7 @@ import importlib
 import sys
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
+
 for name in [
     "moderngl_window.resources",
     "moderngl_window.resources.programs",
@@ -15,7 +16,6 @@ for name in [
     except Exception as e:
         print(f"Warning preloading {name}:", e)
 
-
 # --- Disable automatic resource registration if no "scene" folder exists ---
 import os
 from pathlib import Path
@@ -24,6 +24,7 @@ scene_path = Path(__file__).parent / "scene"
 if not scene_path.exists():
     # Override the register_dir function to a harmless dummy
     import moderngl_window.resources
+
     moderngl_window.resources.register_dir = lambda *a, **k: None
     print("[Info] Disabled moderngl_window resource registration (no scene folder).")
 # -------------------------------------------------------------------
@@ -31,10 +32,6 @@ import moderngl_window
 import moderngl
 from pyrr import Vector4, Vector3 as PyrrVector3, Quaternion as PyrrQuat, Matrix44
 import numpy as np
-
-
-
-
 
 
 class BereshitRenderer(moderngl_window.WindowConfig):
@@ -65,9 +62,10 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.ui_vbo = self.ctx.buffer(reserve=20 * 6 * 64)  # ~64 quads
         self.bullshit = ""
         self.text_elements = []
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.text_prog = self.ctx.program(
-            vertex_shader=open("bereshit/shaders/text_vertex_shader.vert").read(),
-            fragment_shader=open("bereshit/shaders/text_fragment_shader.vert").read())
+            vertex_shader=open(f"{BASE_DIR}/shaders/text_vertex_shader.vert").read(),
+            fragment_shader=open(f"{BASE_DIR}/shaders/text_fragment_shader.vert").read())
         # === 4. Quad for drawing ===
         vertices = np.array([
             -1.0, -1.0, 0.0, 1.0,  # bottom-left
@@ -83,8 +81,8 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         )
         # Simple UI shader
         self.ui_prog = self.ctx.program(
-            vertex_shader=open("bereshit/shaders/ui_prog.vert").read(),
-            fragment_shader=open("bereshit/shaders/ui_fragment_shader.vert").read())
+            vertex_shader=open(f"{BASE_DIR}/shaders/ui_prog.vert").read(),
+            fragment_shader=open(f"{BASE_DIR}/shaders/ui_fragment_shader.vert").read())
         self.ui_vao = self.ctx.vertex_array(
             self.ui_prog,
             [(self.ui_vbo, "2f 4f", "in_position", "in_color")]
@@ -93,11 +91,11 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         # Store UI elements to draw
         self.ui_elements = []
         self.wire_prog = self.ctx.program(
-            vertex_shader=open("bereshit/shaders/wire_vertex_shader.vert").read(),
-            fragment_shader=open("bereshit/shaders/wire_fragment_shader.vert").read())
+            vertex_shader=open(f"{BASE_DIR}/shaders/wire_vertex_shader.vert").read(),
+            fragment_shader=open(f"{BASE_DIR}/shaders/wire_fragment_shader.vert").read())
         self.solid_prog = self.ctx.program(
-            vertex_shader=open("bereshit/shaders/solid_vertex_shader.vert").read(),
-            fragment_shader=open("bereshit/shaders/solid_fragment_shader.vert").read())
+            vertex_shader=open(f"{BASE_DIR}/shaders/solid_vertex_shader.vert").read(),
+            fragment_shader=open(f"{BASE_DIR}/shaders/solid_fragment_shader.vert").read())
         self.view = Matrix44.identity()
         self.projection = Matrix44.perspective_projection(self.fov, self.wnd.aspect_ratio, 0.1, 1000.0)
         self.ctx.enable(moderngl.BLEND)
@@ -108,7 +106,6 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.keys_down = set()
         self.keys_up = set()
         self.keys = list()
-
 
         self.meshes = []
         self.prepare_meshes()
@@ -149,6 +146,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
             string += key_name
         self.keys = list()
         return string
+
     def on_key_event(self, key, action, modifiers):
         keys = self.wnd.keys
         self.keys.append(key)
@@ -165,16 +163,16 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         if shading == "wire":
             for obj in self.root_object.get_all_children():
 
-                if obj.Mesh is None or obj.Mesh.vertices == []:
+                if obj.Mesh is None or obj.Mesh.vertices() == []:
                     continue
 
                 # Convert vertices to numpy
                 # verts = [(v * obj.size * 0.5).to_np() for v in
                 #          obj.Mesh.vertices]  # Ensure this returns list or np.array of floats
-                verts = [v.to_np() for v in obj.Mesh.vertices]  # no size, no 0.5
+                verts = [v.to_np() for v in obj.Mesh.vertices()]  # no size, no 0.5
 
                 lines = []
-                for i, j in obj.Mesh.edges:
+                for i, j in obj.Mesh.edges():
                     lines.extend(verts[i])  # 👈 flatten the vector into x, y, z
                     lines.extend(verts[j])
 
@@ -195,12 +193,12 @@ class BereshitRenderer(moderngl_window.WindowConfig):
                     continue
 
                 # Convert vertices to numpy (scaled and centered)
-                verts = [(v * obj.size * 0.5).to_np() for v in obj.Mesh.vertices]
+                verts = [(v * obj.size * 0.5).to_np() for v in obj.Mesh.vertices()]
 
                 # Build triangle vertex list
                 triangles = []
-                if obj.Mesh.triangles:
-                    for tri in obj.Mesh.triangles:  # tri = (i, j, k)
+                if obj.Mesh.triangles():
+                    for tri in obj.Mesh.triangles():  # tri = (i, j, k)
                         for index in tri:
                             triangles.extend(verts[index])  # flatten x, y, z into list
 
@@ -218,20 +216,20 @@ class BereshitRenderer(moderngl_window.WindowConfig):
                         'len': len(triangles),
                     })
 
-    def prepare_missing_meshes(self,missing):
+    def prepare_missing_meshes(self, missing):
         shading = self.cam.shading
         if shading == "wire":
             for obj in missing:
-                if obj.Mesh is None or obj.Mesh.vertices == []:
+                if obj.Mesh is None or obj.Mesh.vertices() == []:
                     continue
 
                 # Convert vertices to numpy
                 # verts = [(v * obj.size * 0.5).to_np() for v in
                 #          obj.Mesh.vertices]  # Ensure this returns list or np.array of floats
-                verts = [v.to_np() for v in obj.Mesh.vertices]  # no size, no 0.5
+                verts = [v.to_np() for v in obj.Mesh.vertices()]  # no size, no 0.5
 
                 lines = []
-                for i, j in obj.Mesh.edges:
+                for i, j in obj.Mesh.edges():
                     lines.extend(verts[i])  # 👈 flatten the vector into x, y, z
                     lines.extend(verts[j])
 
@@ -308,7 +306,6 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         # self.ui_elements.clear()
         self.ctx.enable(moderngl.DEPTH_TEST)
 
-
     def render_text(self):
 
         # === 1. Create text image using Pillow ===
@@ -317,13 +314,14 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         for text in self.text_elements:
             font_size = int(64 * text.scale)
             font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", font_size)
-            draw.text((text.center), text.text, font=font, fill=text.color+(int(255*text.opacity),))
+            draw.text((text.center), text.text, font=font, fill=text.color + (int(255 * text.opacity),))
 
         text_data = np.array(img).astype('u1')
 
         # === 2. Upload to OpenGL as a texture ===
         self.texture = self.ctx.texture(self.window_size, 4, text_data.tobytes())
         self.texture.use()
+
     # def render_box(self):
     #
     #     # === 1. Create text image using Pillow ===
@@ -344,16 +342,19 @@ class BereshitRenderer(moderngl_window.WindowConfig):
 
     def addUI(self, element):
         self.UI_elements.add(element)
+
     def removeUI(self, element):
         self.UI_elements.add(element)
+
     def renderUI(self):
         for element in self.UI_elements:
             if type(element) == Text():
                 self.render_text()
 
-    def add_text_rect(self,text):
+    def add_text_rect(self, text):
         self.text_elements.append(text)
-    def remove_text_rect(self,text):
+
+    def remove_text_rect(self, text):
         self.text_elements = [t for t in self.text_elements if t is not text]
 
     def add_ui_rect(self, box):
@@ -388,8 +389,6 @@ class BereshitRenderer(moderngl_window.WindowConfig):
 
         self.ctx.clear(0.0, 0.0, 0.0)
 
-
-
         cam_pos = self.camera_obj.position.to_np()
         cam_rot = self.camera_obj.quaternion
         # Rotate forward vector (0, 0, 1) using the rotation matrix
@@ -423,7 +422,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
             # obj_rot_matrix = Matrix44.from_quaternion(pyrr_obj_q)
 
             model = (
-                    Matrix44.from_scale(size*0.5)
+                    Matrix44.from_scale(size * 0.5)
                     @ Matrix44.from_quaternion(PyrrQuat([rot.x, rot.y, rot.z, rot.w]))
                     @ Matrix44.from_translation(pos)
             )
@@ -464,9 +463,9 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         # self.add_ui_rect(x, y, rect_width, rect_height, color=(1.0, 0.0, 0.0))
 
         # --- Render UI on top ---
+        ### memory leak on the ui
         self.render_text()
         self.render_ui()
-        # self.render_box()
         self.text_vbo.render(moderngl.TRIANGLE_STRIP)
 
 
@@ -476,10 +475,9 @@ def run_renderer(root_object, Initialize):
     moderngl_window.run_window_config(BereshitRenderer, args=['--window', 'glfw'])
 
 
-
-
 class Text:
-    def __init__(self, text="", center =(0.0, 0.0), size=(512, 128), scale=1.0,color=(255, 255, 255), opacity=1,container=None):
+    def __init__(self, text="", center=(0.0, 0.0), size=(512, 128), scale=1.0, color=(255, 255, 255), opacity=1,
+                 container=None):
         self.container = container
         self.text = text
         self.center = center
@@ -488,8 +486,10 @@ class Text:
         self.color = color
         self.opacity = opacity
 
+
 class Box:
-    def __init__(self, center =(960, 540), size=(100, 100), scale=1.0,color=(255, 255, 255), opacity=1, container=None, children=None):
+    def __init__(self, center=(960, 540), size=(100, 100), scale=1.0, color=(255, 255, 255), opacity=1, container=None,
+                 children=None):
         self.container = container
         self.children = children
         self.center = center
