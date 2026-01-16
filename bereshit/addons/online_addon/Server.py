@@ -3,6 +3,9 @@ import threading
 import json
 import random
 import string
+from concurrent.futures import ThreadPoolExecutor
+
+from bereshit import World, Object, Vector3, Core
 
 HOST = "0.0.0.0"
 TCP_PORT = 5000
@@ -31,6 +34,7 @@ def generate_passcode(length=6):
 # ---------------------------------------------------
 
 def handle_tcp_client(conn, addr):
+
     print("[TCP] Connection from", addr)
 
     try:
@@ -45,14 +49,28 @@ def handle_tcp_client(conn, addr):
             # --- Create Room ---
             if action == "create_room":
                 passcode = generate_passcode()
-                rooms[passcode] = {"users": {}}
-                conn.send(json.dumps({"status": "ok", "room": passcode}).encode())
 
+                # world = World()
+
+
+                rooms[passcode] = {
+                    "users": {},
+                    # "world": world
+                }
+
+                # Core.run(world)
+
+                conn.send(json.dumps({
+                    "status": "ok",
+                    "room": passcode
+                }).encode())
+                print("create_room")
             # --- Find Room ---
             elif action == "find_room":
                 room = msg["room"]
                 exists = room in rooms
                 conn.send(json.dumps({"exists": exists}).encode())
+                print("find_room")
 
             # --- Join Room ---
             elif action == "join_room":
@@ -66,6 +84,8 @@ def handle_tcp_client(conn, addr):
                         "status": "error",
                         "message": "Room not found"
                     }).encode())
+                    print("room not found")
+
                     continue
 
                 # Username already exists
@@ -74,12 +94,18 @@ def handle_tcp_client(conn, addr):
                         "status": "error",
                         "message": "Username already taken"
                     }).encode())
+                    print("Username already exists")
+
                     continue
+
+                # world = rooms[room]["world"]
+                # world.add_object(Object(name=username))
 
                 # OK: add user
                 rooms[room]["users"][username] = (addr[0], udp_port)
                 user_rooms[username] = room
                 conn.send(json.dumps({"status": "ok"}).encode())
+                print("join_room")
 
 
     except Exception as e:
@@ -94,7 +120,7 @@ def tcp_server():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind((HOST, TCP_PORT))
     s.listen()
-    print(f"[TCP] Listening on {HOST}:{TCP_PORT}")
+    # print(f"[TCP] Listening on {HOST}:{TCP_PORT}")
 
     while True:
         conn, addr = s.accept()
@@ -121,28 +147,29 @@ def broadcast(room, sender, message):
 
             udp_socket.sendto(payload, (ip, port))
 
+executor = ThreadPoolExecutor(max_workers=8)
+
+def handle_packet(data, addr):
+    try:
+        msg = json.loads(data.decode())
+    except Exception:
+        return
+
+    if msg.get("action") == "broadcast":
+        username = msg["username"]
+        message = msg["message"]
+        room = user_rooms.get(username)
+        if room:
+            broadcast(room, username, message)
 
 def udp_server():
-    print(f"[UDP] Listening for broadcast messages on {HOST}:{UDP_PORT}")
-
+    print(f"[UDP] Listening on {HOST}:{UDP_PORT}")
     while True:
         try:
             data, addr = udp_socket.recvfrom(4096)
+            executor.submit(handle_packet, data, addr)
         except ConnectionResetError:
-            # Ignore – usually remote client closed or unreachable
             continue
-
-        msg = json.loads(data.decode())
-        # msg = { "action": "broadcast", "room": "...", "username": "...", "message": "..." }
-
-        if msg.get("action") == "broadcast":
-            username = msg["username"]
-            message = msg["message"]
-
-            # server decides room
-            room = user_rooms.get(username)
-            if room:
-                broadcast(room, username, message)
 
 
 def main():

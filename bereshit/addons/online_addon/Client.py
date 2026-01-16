@@ -3,6 +3,7 @@ import struct
 import threading
 import json
 
+
 class Client:
     def __init__(self, host="127.0.0.1", tcp_port=5000, udp_port=5001):
         self.server_host = host
@@ -94,6 +95,6 @@ if __name__ == "__main__":
     c.Connect(room, "Yaly")
     print("Connected!")
 
-    while True:
-        msg = input()
-        c.Broadcast("Yaly", msg)
+    # while True:
+    #     msg = input()
+    c.Broadcast("Yaly", "gf")
