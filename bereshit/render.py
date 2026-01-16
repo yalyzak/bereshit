@@ -193,7 +193,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
                     continue
 
                 # Convert vertices to numpy (scaled and centered)
-                verts = [(v * obj.size * 0.5).to_np() for v in obj.Mesh.vertices()]
+                verts = [(v * obj.size * 0.125).to_np() for v in obj.Mesh.vertices()]
 
                 # Build triangle vertex list
                 triangles = []
@@ -250,12 +250,12 @@ class BereshitRenderer(moderngl_window.WindowConfig):
                     continue
 
                 # Convert vertices to numpy (scaled and centered)
-                verts = [(v * obj.size * 0.25).to_np() for v in obj.Mesh.vertices]
+                verts = [(v * obj.size * 0.25).to_np() for v in obj.Mesh.vertices()]
 
                 # Build triangle vertex list
                 triangles = []
-                if obj.Mesh.triangles:
-                    for tri in obj.Mesh.triangles:  # tri = (i, j, k)
+                if obj.Mesh.triangles():
+                    for tri in obj.Mesh.triangles():  # tri = (i, j, k)
                         for index in tri:
                             triangles.extend(verts[index])  # flatten x, y, z into list
 
