@@ -1,4 +1,6 @@
 import numpy as np
+
+from bereshit import Quaternion
 from bereshit.Vector3 import Vector3
 
 
@@ -19,7 +21,7 @@ class Rigidbody:
 
     def __init__(self, obj=None, mass=1.0, size=Vector3(1, 1, 1), position=Vector3(0, 0, 0),
                  center_of_mass=Vector3(0, 0, 0), velocity=None, angular_velocity=None, force=None,
-                 isKinematic=False, useGravity=True, drag=0.98, friction_coefficient=0.6, restitution=0.6,COM=None):
+                 isKinematic=False, useGravity=True, drag=0.98, friction_coefficient=0.6, restitution=0.6,COM=None, Freeze_Rotation=None):
         self.mass = mass
         self.material = ""
         self.drag = drag
@@ -35,7 +37,7 @@ class Rigidbody:
         self.force = force or Vector3(0, 0, 0)
         self.isKinematic = isKinematic
         self.forward = Vector3()
-
+        self.Freeze_Rotation = Freeze_Rotation or Vector3(0, 0, 0)
         self.useGravity = useGravity
 
         if angular_velocity is None:
@@ -44,6 +46,105 @@ class Rigidbody:
 
         self.normal_force = Vector3()
         self._COM = COM
+
+    def Iinv_world(self):
+        # This should only be called for dynamic bodies
+        if self.isKinematic:
+            return np.zeros((3, 3))
+
+        # 1. Get the local inverse inertia tensor (3x3 matrix)
+        # Ensure this is the INVERSE, not the base inertia
+        I_inv_body = self.inverse_inertia
+
+        # 2. Get the rotation matrix
+        # If using a quaternion:
+        R = self.parent.quaternion.to_matrix3()
+        # R = Quaternion().to_matrix3()
+
+        # 3. Transform to world space: R * I_inv * R_transpose
+        return R @ I_inv_body @ R.T
+    def integrat(self, dt):
+        # === 4) INTEGRATION PHASE ===
+        # 4.1) Linear acceleration & velocity:
+        self.acceleration = self.force / self.mass
+
+        # 4.2) Angular acceleration & velocity (component‐wise):
+        # I_world_inv = Iinv_world(rb)
+        # rb.angular_acceleration = I_world_inv @ rb.torque
+        self.angular_acceleration = Vector3(
+            self.torque.x / self.inertia.x if self.inertia.x != 0 else 0,
+            self.torque.y / self.inertia.y if self.inertia.y != 0 else 0,
+            self.torque.z / self.inertia.z if self.inertia.z != 0 else 0
+        )
+        # 4.3) Integrate rotation
+
+        ang_disp = self.angular_velocity * dt \
+                   + 0.5 * self.angular_acceleration * dt * dt
+        self.angular_velocity += self.angular_acceleration * dt
+        # self.angular_velocity *= 0.8
+        w = self.angular_velocity
+        mag = w.magnitude()
+        # if mag > 0:
+        #     self.angular_velocity -= w.normalized() * (0.1 * mag * mag * dt / (1/60))
+        self.parent.quaternion *= Quaternion.euler_radians(ang_disp)
+
+        self.parent.position += self.velocity * dt \
+                         + 0.5 * self.acceleration * dt * dt
+
+        self.velocity += self.acceleration * dt
+
+        self.force = Vector3(0, 0, 0)
+        self.torque = Vector3(0, 0, 0)
+
+        self.angular_acceleration = Vector3(0, 0, 0)
+        self.torque = Vector3(0, 0, 0)
+
+    def apply_impulse_at_point(rb,velocity ,impulse_point_world):
+        """
+        rb                     : Rigidbody
+        impulse_point_world    : Vector3 (world space)
+        impulse_dir            : Vector3 (world space, does NOT need to be normalized)
+        delta_v_desired        : float (velocity change along impulse_dir)
+        """
+
+        if rb.isKinematic:
+            return
+        impulse_dir = velocity.normalized()
+        delta_v_desired = velocity.magnitude()
+        # --- Normalize impulse direction ---
+        n = impulse_dir.normalized()
+
+        # --- Vector from COM to impulse point (world space) ---
+        r = impulse_point_world - rb.parent.position
+
+        inv_mass = 1.0 / rb.mass
+
+        # --- World inverse inertia tensor ---
+        Iinv = rb.Iinv_world()  # 3x3 numpy matrix
+
+        # --- Effective mass calculation ---
+        rn = r.cross(n)
+        Iinv_rn = Vector3.from_np(Iinv @ rn.to_np())
+        angular_term = n.dot(Iinv_rn.cross(r))
+
+        k = inv_mass + angular_term
+
+        if k <= 1e-8:
+            return  # avoid division by zero / singular config
+
+        # --- Solve impulse magnitude ---
+        j = delta_v_desired / k
+
+        # --- Impulse vector ---
+        J = n * j
+
+        # --- Apply linear impulse ---
+        rb.velocity += J * inv_mass
+
+        # --- Apply angular impulse ---
+        rb.angular_velocity += Vector3.from_np(
+            Iinv @ r.cross(J).to_np()
+        )
 
     def _get_friction(self, other_rb):
         """
@@ -71,6 +172,7 @@ class Rigidbody:
         self.force += force
 
         if ContactPoint is not None:
+            ContactPoint = self.parent.position + ContactPoint
             # r is the lever arm (vector from center of mass to contact point)
             r = self.parent.position - ContactPoint
             # torque = r × F
@@ -88,6 +190,11 @@ class Rigidbody:
                 (1 / 12) * self.mass * (hx ** 2 + hz ** 2),
                 (1 / 12) * self.mass * (hy ** 2 + hx ** 2)
             )
+            self.inertia_tensor = np.array([
+                [self.inertia.x, 0.0, 0.0],
+                [0.0, self.inertia.y, 0.0],
+                [0.0, 0.0, self.inertia.z]
+            ])
         else:
             def box_inertia_vector(mass, hx, hy, hz, com_offset):
                 """
