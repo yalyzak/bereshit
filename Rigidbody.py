@@ -185,6 +185,17 @@ class Rigidbody:
         else:
             return Rigidbody._default_friction
 
+    def find_restitution(rb1, rb2, v_norm=None):
+        restitution = 0.0
+        if v_norm > -1:
+            restitution
+        elif rb1 and rb2:
+            restitution = min(rb1.restitution, rb2.restitution)
+        elif rb1:
+            restitution = rb1.restitution
+        elif rb2:
+            restitution = rb2.restitution
+        return restitution
     def AddForce(self, force, ContactPoint=None):
         # Linear force always contributes directly to acceleration
         self.force += force
