@@ -59,16 +59,26 @@ class Rigidbody:
         impulse_vec = normal * J
 
         if rb1 and not rb1.isKinematic:
-            rb1.velocity += impulse_vec / rb1.mass
+            rb1.velocity -= impulse_vec / rb1.mass
             torque_impulse = r1.cross(impulse_vec)
             ang_impulse = Vector3.from_np(rb1.Iinv_world() @ torque_impulse.to_np())
-            rb1.angular_velocity -= ang_impulse
+            rb1.angular_velocity += ang_impulse
         if rb2 and not rb2.isKinematic:
-            rb2.velocity -= impulse_vec / rb2.mass
+            rb2.velocity += impulse_vec / rb2.mass
             torque_impulse = r2.cross(impulse_vec)
             ang_impulse = Vector3.from_np(rb2.Iinv_world() @ torque_impulse.to_np())
-            rb2.angular_velocity += ang_impulse
+            rb2.angular_velocity -= ang_impulse
+        v1 = rb1.velocity if not rb1.isKinematic else Vector3()
+        v2 = rb2.velocity if not rb2.isKinematic else Vector3()
 
+        w1 = rb1.angular_velocity if not rb1.isKinematic else Vector3()
+        w2 = rb2.angular_velocity if not rb2.isKinematic else Vector3()
+
+        v1_point = v1 + w1.cross(-r1)
+        v2_point = v2 + w2.cross(-r2)
+
+        v_rel = v2_point - v1_point  # ✅ B − A
+        v_norm = v_rel.dot(normal)
     def apply_friction_impulse(self, other, normal, J, contact_point):
         """
         Applies Coulomb friction impulse based on the relative velocity,
@@ -149,10 +159,11 @@ class Rigidbody:
         self.angular_velocity += self.angular_acceleration * dt
         w = self.angular_velocity
         mag = w.magnitude()
-        if mag > 0:
-            self.angular_velocity -= w.normalized() * (0.05  * mag * dt / (1/60))
+        # if mag > 0:
+        #     self.angular_velocity -= w.normalized() * (0.35 * mag * dt / (1/60))
 
-        self.parent.quaternion *= Quaternion.euler(ang_disp)
+        self.parent.quaternion = Quaternion.euler_radians(ang_disp) * self.parent.quaternion
+
 
         self.parent.position += self.velocity * dt \
                          + 0.5 * self.acceleration * dt * dt

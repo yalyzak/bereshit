@@ -8,7 +8,7 @@ from bereshit.Rigidbody import Rigidbody
 from bereshit.Vector3 import Vector3
 
 class World:
-    def __init__(self, children=None,gizmos=None,gravity=Vector3(0, -9.8, 0),tick=None,speed=None):
+    def __init__(self, children=None,gizmos=False,gravity=Vector3(0, -9.8, 0),tick=None,speed=None):
         self.children = children or []
         self.Camera = self.search_by_component('Camera')
         self.gizmos = gizmos
@@ -71,7 +71,7 @@ class World:
             joint = child.get_component("joint")
             if joint is not None:
                 joint.solve(dt)
-    def solve_collections(self, children, dt, gizmos):
+    def solve_collections(self, children, dt):
 
         contacts = []
         contacts2 = []
@@ -145,19 +145,26 @@ class World:
                     if not rb2.isKinematic:
                         rb2.velocity += (rb2.force / rb2.mass) * dt
                         rb2.force = Vector3()
-                    v1_linear = rb1.velocity if (rb1 and not rb1.isKinematic) else Vector3(0, 0, 0)
-                    v2_linear = rb2.velocity if (rb2 and not rb2.isKinematic) else Vector3(0, 0, 0)
-                    v1_angular = rb1.angular_velocity.cross(r1) if (rb1 and not rb1.isKinematic) else Vector3(0, 0, 0)
-                    v2_angular = rb2.angular_velocity.cross(r2) if (rb2 and not rb2.isKinematic) else Vector3(0, 0, 0)
 
-                    v_rel_linear = v1_linear - v2_linear  # B minus A (matches normal pointing A->B)
-                    v_norm_linear = v_rel_linear.dot(normal)
+                    v1 = rb1.velocity if not rb1.isKinematic else Vector3()
+                    v2 = rb2.velocity if not rb2.isKinematic else Vector3()
 
-                    v_rel_angular = v1_angular - v2_angular  # B minus A (matches normal pointing A->B)
+                    w1 = rb1.angular_velocity if not rb1.isKinematic else Vector3()
+                    w2 = rb2.angular_velocity if not rb2.isKinematic else Vector3()
+
+                    v1_point = v1 + w1.cross(-r1)
+                    v2_point = v2 + w2.cross(-r2)
+
+                    v_rel = v2_point - v1_point
+                    v_norm = v_rel.dot(normal)
+
+                    v_rel_angular = w1.cross(-r1) - w2.cross(-r2)
                     v_norm_angular = v_rel_angular.dot(normal)
 
-                    v_rel = (v1_linear + v1_angular) - (v2_linear + v2_angular)
-                    v_norm = v_rel.dot(normal)
+                    v_rel_linear = v1 - v2
+                    v_norm_linear = v_rel_linear.dot(normal)
+
+
                     contacts.append([{
                         "r1": r1,
                         "r2": r2,
@@ -171,21 +178,25 @@ class World:
                         "contact_point": contact_point,
                     }])
 
-        if gizmos:
+        if self.gizmos:
             self.set_gizmos(contacts=contacts)
 
         for contact_point in contacts:
             for i, contact in enumerate(contact_point):
                 v_norm = contact["v_norm"]
-                if v_norm >= 0.1:
+                rb1 = contact["rb1"]
+                rb2 = contact["rb2"]
+                # if rb1.parent.collider.stay or rb2.parent.collider.stay:
+                #     continue
+
+                if v_norm >= 0:
                     continue
 
                 normal = contact["normal"]
                 contact_point = contact["contact_point"]
                 r1 = contact["r1"]
                 r2 = contact["r2"]
-                rb1 = contact["rb1"]
-                rb2 = contact["rb2"]
+
                 restitution = rb1.find_restitution(rb2, v_norm)
                 rn1 = r1.cross(normal)
                 rn2 = r2.cross(normal)
@@ -209,9 +220,11 @@ class World:
                 k_angular = normal.dot(term1 + term2)
                 inv_eff_mass = k_linear + k_angular
 
-                J = (1 + restitution) * v_norm / inv_eff_mass
-
-                rb1.resolve_dynamic_collision(rb2, normal, J, r1, r2)
+                J = -(1 + restitution) * v_norm / inv_eff_mass
+                J = abs(J)
+                # if contact["v_norm_angular"] > contact["v_norm_linear"]:
+                #     J = -J
+                rb1.resolve_dynamic_collision(rb2, normal, J, r1, r2,)
                 rb1.apply_friction_impulse(rb2, normal, J, contact_point)
 
         return contacts
@@ -246,8 +259,9 @@ class World:
 
         children = self.get_all_children_physics()
         self.apply_gravity(children)  # APPLY GRAVITY and external forces
-        for _ in range(1):
-            self.solve_collections(children, dt, gizmos)  # handel collisions and friction
+        for _ in range(5):
+            self.solve_collections(children, dt)  # handel collisions and friction
+
         self.solve_joints(children, dt)
 
         for child in children:

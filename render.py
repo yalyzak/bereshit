@@ -464,9 +464,11 @@ class BereshitRenderer(moderngl_window.WindowConfig):
 
         # --- Render UI on top ---
         ### memory leak on the ui
-        self.render_text()
-        self.render_ui()
-        self.text_vbo.render(moderngl.TRIANGLE_STRIP)
+        # self.render_text()
+        # self.render_ui()
+        # self.text_vbo.render(moderngl.TRIANGLE_STRIP)
+        ### memory leak on the ui
+
 
 
 def run_renderer(root_object, Initialize):

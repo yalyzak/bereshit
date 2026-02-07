@@ -14,6 +14,7 @@ class BoxCollider:
         self.obj = object_pointer
         self.is_trigger = is_trigger
         self.enter = False
+        self.stay = False
 
     def OnCollisionEnter(self, other_collider):
         self.enter = True
@@ -23,12 +24,16 @@ class BoxCollider:
                 component.OnCollisionEnter(other_collider)
 
     def OnCollisionStay(self, other_collider):
+        self.enter = False
+        self.stay = True
         for component in self.parent.components.values():
             if hasattr(component, 'OnCollisionStay') and component.OnCollisionStay is not None and component != self:
                 component.OnCollisionStay(other_collider)
 
     def OnCollisionExit(self, other_collider):
         self.enter = False
+        self.stay = False
+
         for component in self.parent.components.values():
             if hasattr(component, 'OnCollisionExit') and component.OnCollisionExit is not None and component != self:
                 component.OnCollisionExit(other_collider)
@@ -813,6 +818,10 @@ class BoxCollider:
             return collision_axis, collision_type, collision_axis_indices
         result = SAT()
         if result is None:
+            if self.stay or self.enter:
+                self.OnCollisionExit(other_collider)
+            if other_collider.stay or other_collider.enter:
+                other_collider.OnCollisionExit(other_collider) # could creat problems if two objects collide at once
             return None
         collision_axis, collision_type, collision_axis_indices = result
 
@@ -859,7 +868,7 @@ class BoxCollider:
                         hit.point)) - self.parent.position
                     if V.dot(collision_axis) > 0:
                         collision_axis = -collision_axis
-                    hits.add((tuple(hit.point), collision_axis, 0))
+                    hits.add((tuple(hit.point), -collision_axis, 0))
                 rb = (self, other_collider)
 
         if len(hits) == 0:
@@ -875,7 +884,7 @@ class BoxCollider:
                     V = Vector3(tuple(hit.point)) - other_collider.parent.position  # i think that maybe i need to add if collision_type == b then use self.other_collider.position
                     if V.dot(collision_axis) > 0:
                         collision_axis = -collision_axis
-                    hits.add((tuple(hit.point), collision_axis, 0))
+                    hits.add((tuple(hit.point), -collision_axis, 0))
                     rb = (other_collider, self)
         contact_points = list(hits)
 
