@@ -3,6 +3,7 @@ import importlib
 import sys
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
+from importlib.resources import files
 
 for name in [
     "moderngl_window.resources",
@@ -64,8 +65,17 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.text_elements = []
         BASE_DIR = os.path.dirname(os.path.abspath(__file__))
         self.text_prog = self.ctx.program(
-            vertex_shader=open(f"{BASE_DIR}/shaders/text_vertex_shader.vert").read(),
-            fragment_shader=open(f"{BASE_DIR}/shaders/text_fragment_shader.vert").read())
+            vertex_shader=(
+                    files("bereshit")
+                    / "shaders"
+                    / "text_vertex_shader.vert"
+            ).read_text(),
+            fragment_shader=(
+                    files("bereshit")
+                    / "shaders"
+                    / "text_fragment_shader.vert"
+            ).read_text(),
+            )
         # === 4. Quad for drawing ===
         vertices = np.array([
             -1.0, -1.0, 0.0, 1.0,  # bottom-left
@@ -81,8 +91,16 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         )
         # Simple UI shader
         self.ui_prog = self.ctx.program(
-            vertex_shader=open(f"{BASE_DIR}/shaders/ui_prog.vert").read(),
-            fragment_shader=open(f"{BASE_DIR}/shaders/ui_fragment_shader.vert").read())
+            vertex_shader=(
+                    files("bereshit")
+                    / "shaders"
+                    / "ui_prog.vert"
+            ).read_text(),
+            fragment_shader=(
+                    files("bereshit")
+                    / "shaders"
+                    / "ui_fragment_shader.vert"
+            ).read_text(),)
         self.ui_vao = self.ctx.vertex_array(
             self.ui_prog,
             [(self.ui_vbo, "2f 4f", "in_position", "in_color")]
@@ -91,11 +109,28 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         # Store UI elements to draw
         self.ui_elements = []
         self.wire_prog = self.ctx.program(
-            vertex_shader=open(f"{BASE_DIR}/shaders/wire_vertex_shader.vert").read(),
-            fragment_shader=open(f"{BASE_DIR}/shaders/wire_fragment_shader.vert").read())
+            vertex_shader=(
+                    files("bereshit")
+                    / "shaders"
+                    / "wire_vertex_shader.vert"
+            ).read_text(),
+            fragment_shader=(
+                    files("bereshit")
+                    / "shaders"
+                    / "wire_fragment_shader.vert"
+            ).read_text(),
+        )
         self.solid_prog = self.ctx.program(
-            vertex_shader=open(f"{BASE_DIR}/shaders/solid_vertex_shader.vert").read(),
-            fragment_shader=open(f"{BASE_DIR}/shaders/solid_fragment_shader.vert").read())
+            vertex_shader=(
+                    files("bereshit")
+                    / "shaders"
+                    / "solid_vertex_shader.vert"
+            ).read_text(),
+            fragment_shader=(
+                    files("bereshit")
+                    / "shaders"
+                    / "solid_fragment_shader.vert"
+            ).read_text(),)
         self.view = Matrix44.identity()
         self.projection = Matrix44.perspective_projection(self.fov, self.wnd.aspect_ratio, 0.1, 1000.0)
         self.ctx.enable(moderngl.BLEND)

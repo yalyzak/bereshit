@@ -1,3 +1,4 @@
+import random
 import traceback
 import time
 
@@ -21,6 +22,7 @@ class World:
 
     def add_object(self, object):
         self.children.append(object)
+
     def search_by_component(self, component_name):
         # Check if this object has the desired component
         if hasattr(self, "components") and component_name in self.components:
@@ -48,6 +50,7 @@ class World:
             all_objs.append(target)
             all_objs.extend(target.get_all_children())
         return all_objs
+
     def get_all_children_physics(self):
         all_objs = []
         for child in self.children:
@@ -57,11 +60,13 @@ class World:
                 all_objs.append(child)
             all_objs.extend(child.get_all_children_physics())
         return all_objs
+
     @staticmethod
     def apply_gravity(children):
         for child in children:
             rb = child.get_component("Rigidbody")
             rb.apply_gravity()
+
     @staticmethod
     def solve_joints(children, dt):
         """
@@ -71,10 +76,10 @@ class World:
             joint = child.get_component("joint")
             if joint is not None:
                 joint.solve(dt)
+
     def solve_collections(self, children, dt):
 
         contacts = []
-        contacts2 = []
 
         # STEP 1: Collect all contacts (use ALL manifold points)
         for i in range(len(children)):
@@ -96,42 +101,45 @@ class World:
                 contact_points, rb = result  # contact_points = [(cp, n, pn), ...]
                 c1, c2 = rb
                 rb1, rb2 = c1.parent.Rigidbody, c2.parent.Rigidbody
-                if type(contact_points[0]) == tuple:  # For each point in the manifold, add a separate constraint
-                    for (contact_point, normal, penetration) in contact_points:
-                        contact_point = Vector3(contact_point)
+                for _ in range(20):
+                    contacts = []
+                    contacts2 = []
+                    if type(contact_points[0]) == tuple:  # For each point in the manifold, add a separate constraint
+                        for (contact_point, normal, penetration) in contact_points:
+                            # contact_point = Vector3(contact_point)
+
+                            rb1.solve_impulse(rb2, contact_point, normal, penetration, dt)
+
+                            contacts2.append({
+                                "rb1": rb1,
+                                "rb2": rb2,
+                                "normal": normal,
+                                "penetration": penetration,
+                                "contact_point": contact_point,
+                            })
+                            contacts.append(contacts2)
+
+                    elif type(contact_points[0]) == Vector3:
+                        contact_point, normal, penetration = contact_points
 
                         rb1.solve_impulse(rb2, contact_point, normal, penetration, dt)
 
-                        contacts2.append({
+                        contacts.append([{
                             "rb1": rb1,
                             "rb2": rb2,
                             "normal": normal,
                             "penetration": penetration,
                             "contact_point": contact_point,
-                        })
-                        contacts.append(contacts2)
-
-                elif type(contact_points[0]) == Vector3:
-                    contact_point, normal, penetration = contact_points
-
-                    rb1.solve_impulse(rb2, contact_point, normal, penetration, dt)
-
-                    contacts.append([{
-                        "rb1": rb1,
-                        "rb2": rb2,
-                        "normal": normal,
-                        "penetration": penetration,
-                        "contact_point": contact_point,
-                    }])
+                        }])
 
         if self.gizmos:
             self.set_gizmos(contacts=contacts)  # needs Updating/Fixing
 
-        return contacts
+            # return contacts
 
     def set_gizmos(self, contacts=[]):
         for i, contact_point in enumerate(contacts):
-            self.gizmos.children[i].position = contact_point[0]['contact_point']
+            self.gizmos.children[i].position = contact_point[i]['contact_point']
 
     def Start(self):
         children1 = self.get_all_children()
@@ -159,9 +167,9 @@ class World:
 
         children = self.get_all_children_physics()
         self.apply_gravity(children)  # APPLY GRAVITY and external forces
-        self.solve_collections(children, dt)  # handel collisions and friction
-
-        self.solve_joints(children, dt)
+        for _ in range(10):
+            self.solve_collections(children, dt)  # handel collisions and friction
+            self.solve_joints(children, dt)
 
         for child in children:
             rb = child.get_component("Rigidbody")

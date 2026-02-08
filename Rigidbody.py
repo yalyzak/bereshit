@@ -204,8 +204,8 @@ class Rigidbody:
         self.angular_velocity += self.angular_acceleration * dt
         w = self.angular_velocity
         mag = w.magnitude()
-        # if mag > 0:
-        #     self.angular_velocity -= w.normalized() * (0.35 * mag * dt / (1/60))
+        if mag > 0:
+            self.angular_velocity -= w.normalized() * (0.05 * mag * dt / (1/60))
 
         self.parent.quaternion = Quaternion.euler_radians(ang_disp) * self.parent.quaternion
 
