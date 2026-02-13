@@ -11,7 +11,7 @@ class Shoot:
         self.timer = 0.0      # time passed since last shot
         self.speed = 10
         self.target = target
-        self.force = 30
+        self.force = 20
         self.shots = 10
         self.shots_text = Text(str(self.shots), center=(120,850), scale=1)
 

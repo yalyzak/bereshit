@@ -89,7 +89,7 @@ class BoxCollider:
                                     collision_axis_indices, other)
 
         else:
-            [None, (self, other)]
+            [None, (other, self)]
     def get_bounds(self):
         # Get 8 corners in local space
         half = self.size * 0.5
@@ -393,12 +393,12 @@ class BoxCollider:
             for p in contacts:
                 depth = (plane_point - p).dot(ref_normal)
                 if depth >= 0:
-                    final_contacts.append((p,ref_normal,depth))
+                    final_contacts.append((p,-ref_normal,depth))
                     V = p - a_center
                     if V.dot(ref_normal) > 0:
-                        rb = (self, other)
-                    else:
                         rb = (other, self)
+                    else:
+                        rb = (self, other)
 
             return final_contacts, rb
 
@@ -551,4 +551,4 @@ class BoxCollider:
             self.rotation = owner_object.rotation
 
         self.obj = owner_object
-        return "collider" # need to be change to "Collider" but fucks up the whole update loop
+        return "Collider" # need to be change to "Collider" but fucks up the whole update loop

@@ -106,10 +106,11 @@ class Object:
 
         for i, child in enumerate(self.children):
             if child.name == new_child.name:
-               raise Exception("fuck you i did not program this yat")
+               raise Exception("fuck you i did not program this yat"
+                               "to solve this name the object with a unique name")
         else:
             self.children.append(new_child)
-            World.Objects.append(new_child)
+            # World.Objects.append(new_child)
 
     def add_component(self, component, name=None):
         # --- handle list input first ---
@@ -214,6 +215,16 @@ class Object:
     def get_component(self, name):
         if isinstance(name, str):
             return self.components.get(name)
+        else:
+            # name is a class
+            for c in self.components.values():
+                if isinstance(c, type(name)):
+                    return c
+        return None
+    def get_all_components(self, name):
+        components = []
+        if isinstance(name, str):
+            components.append(self.components.get(name))
         else:
             # name is a class
             for c in self.components.values():

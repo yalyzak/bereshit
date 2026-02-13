@@ -167,6 +167,15 @@ class Vector3:
         else:
             return Vector3(0, 0, 0)
 
+    def inverse(self):
+        if self.x == 0 or self.y == 0 or self.z == 0:
+            raise ZeroDivisionError("Cannot invert zero component")
+
+        return np.array([
+            [1 / self.x, 0, 0],
+            [0, 1 / self.y, 0],
+            [0, 0, 1 / self.z]
+        ])
     def __rmul__(self, other):
         return self.__mul__(other)
 
