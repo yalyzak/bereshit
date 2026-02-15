@@ -90,7 +90,6 @@ class World:
                     rb1, rb2 = contact['rb1'], contact['rb2']
                     penetration = contact['penetration']
                     rb1.solve_impulse(rb2, contact_point, normal, penetration, dt)
-
     def solve_collectionsFirstIteration(self, children, dt):
 
         contacts = []
