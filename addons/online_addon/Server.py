@@ -14,42 +14,100 @@ HOST = "0.0.0.0"
 TCP_PORT = 5000
 UDP_PORT = 5001
 
-rooms = {}
-user_rooms = {}
-# rooms[passcode] = {
-#    "users": {
-#        username: (ip, udp_port)
-#    }
-# }
 
-# ---------------------------------------------------
-# Utility
-# ---------------------------------------------------
-class room:
-    def __init__(self):
-        self.passcode = None
-        self.world = None
 class User:
-    def __init__(self, ip, port):
-        self.ip = ip
-        self.port = port
-        self.ping = 0
+    def __init__(self, ip, port, name, room):
+        self._ping = 0
+        self._name = name
+        self._room = room
         self.last_seen = 0
+        self._ip = ip
+        self._port = port
 
-def generate_passcode(length=6):
-    chars = string.ascii_uppercase + string.digits
-    return "0"
-    return ''.join(random.choices(chars, k=length))
+    def GetName(self):
+        return self._name
 
+    def Disconnect(self):
+        self._room.RemovePlayer(self._name)
+    def SetPing(self, ping):
+        self._ping = ping
+    def GetPing(self):
+        return self._ping
+
+    def GetPort(self):
+        return self._port
+
+
+class Room:
+    def __init__(self, world, password=None):
+        self._PassWord = password if password else self.generate_passcode()
+        self._players = {}
+        self._World = world
+
+    def generate_passcode(self, length=6):
+        chars = string.ascii_uppercase + string.digits
+        return ''.join(random.choices(chars, k=length))  # must return
+
+    def AddPlayer(self, player):
+        name = player.GetName()
+
+        if name in self._players:
+            return f"Player name '{name}' already exists in room."
+
+        self._players[name] = player
+
+    def RemovePlayer(self, name):
+        if name in self._players:
+            del self._players[name]
+
+    def GetPassCode(self):
+        return self._PassWord
+    def GetWorld(self):
+        return self._World
+
+    def GetAllPlayers(self):
+        return list(self._players.values())
+
+    def GetPlayer(self, name):
+        return self._players[name]
+
+class RoomManager:
+    def __init__(self):
+        self._rooms = {}  # key: room_id, value: Room object
+
+    def CreateRoom(self, world, password=None):
+        room = Room(world, password)
+        self._rooms[room._PassWord] = room
+        return room.GetPassCode()
+    def JointRoom(self, password, user):
+        room = self.GetRoom(password)
+        if room:
+            return room.AddPlayer(user)
+        else:
+            return "Room not found"
+    def RemoveRoom(self, password):
+        if password in self._rooms:
+            del self._rooms[password]
+
+    def GetRoom(self, password):
+        return self._rooms.get(password)
+
+    def GetAllRooms(self):
+        return self._rooms
+
+
+manager = RoomManager()
+
+def serverObject(name):
+ return Object(name=name, position=Vector3(0, 5, 0)).add_component(
+                        [BoxCollider(), Rigidbody(useGravity=True), ServerController()])
 
 # ---------------------------------------------------
 # TCP HANDLER (room creation, joining)
 # ---------------------------------------------------
 
 
-
 def handle_tcp_client(conn, addr):
-
     print("[TCP] Connection from", addr)
 
     try:
@@ -63,28 +121,22 @@ def handle_tcp_client(conn, addr):
 
             # --- Create Room ---
             if action == "create_room":
-                passcode = generate_passcode()
+                camera = Object(position=Vector3(0, 10, 0), rotation=Vector3(90, 0, 0)).add_component(Camera())
 
-                empty = Object(position=Vector3(0,10,0),rotation=Vector3(90,0,0)).add_component(Camera())
+                room_id = manager.CreateRoom(camera)
 
-
-                rooms[passcode] = {
-                    "users": {},
-                    "world": empty
-                }
-
-                Map = [empty]+build_map()
+                Map = [camera] + build_map()
                 threading.Thread(target=Core.run, args=(Map,), kwargs={"Render": True}, daemon=False).start()
 
                 conn.send(json.dumps({
                     "status": "ok",
-                    "room": passcode
+                    "room": room_id
                 }).encode())
                 print("create_room")
             # --- Find Room ---
             elif action == "find_room":
                 room = msg["room"]
-                exists = room in rooms
+                exists = manager.GetRoom(room) != None
                 conn.send(json.dumps({"exists": exists}).encode())
                 print("find_room")
 
@@ -93,35 +145,18 @@ def handle_tcp_client(conn, addr):
                 room = msg["room"]
                 username = msg["username"]
                 udp_port = msg["udp_port"]  # client tells us its UDP listening socket
-
-                # Room not found
-                if room not in rooms:
+                error = manager.JointRoom(room, User(addr[0],udp_port,username,room))
+                if error:
                     conn.send(json.dumps({
                         "status": "error",
-                        "message": "Room not found"
+                        "message": error
                     }).encode())
-                    print("room not found")
-
-                    continue
-
-                # Username already exists
-                if username in rooms[room]["users"]:
-                    conn.send(json.dumps({
-                        "status": "error",
-                        "message": "Username already taken"
-                    }).encode())
-                    print("Username already exists")
-
-                    continue
-
-                world = rooms[room]["world"]
-                world.add_child(Object(name=username, position=Vector3(0,5,0)).add_component([BoxCollider(),Rigidbody(useGravity=True), ServerController()]))
-
-                # OK: add user
-                rooms[room]["users"][username] = User(addr[0], udp_port)
-                user_rooms[username] = room
-                conn.send(json.dumps({"status": "ok"}).encode())
-                print("join_room")
+                    # continue
+                else:
+                    world = manager.GetRoom(room).GetWorld()
+                    world.add_child(serverObject(username))
+                    conn.send(json.dumps({"status": "ok"}).encode())
+                    print("join_room")
 
 
     except Exception as e:
@@ -150,20 +185,26 @@ def tcp_server():
 udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 udp_socket.bind((HOST, UDP_PORT))
 
-def broadcast(room, sender, message):
-    if room not in rooms:
-        return
-    for username, (ip, port) in rooms[room]["users"].items():
-        if username != sender:
-            payload = json.dumps({
-                "room": room,
-                "from": sender,
-                "message": message
-            }).encode()
 
-            udp_socket.sendto(payload, (ip, port))
+def broadcast(room, sender, message):
+    room = manager.GetRoom(room)
+    if room:
+        players = room.GetAllPlayers()
+
+    # for username, (ip, port) in rooms[room]["users"].items():
+    #     if username != sender:
+    #         payload = json.dumps({
+    #             "room": room,
+    #             "from": sender,
+    #             "message": message
+    #         }).encode()
+    #
+    #         udp_socket.sendto(payload, (ip, port))
+
 
 executor = ThreadPoolExecutor(max_workers=8)
+
+
 def build_map():
     objects = []
 
@@ -190,10 +231,14 @@ def build_map():
     wall_color = (0.6, 0.6, 0.6)
 
     objects += [
-        static_box(Vector3(arena_size*2, wall_height, wall_thickness), Vector3(0, wall_height/2,  arena_size), wall_color),
-        static_box(Vector3(arena_size*2, wall_height, wall_thickness), Vector3(0, wall_height/2, -arena_size), wall_color),
-        static_box(Vector3(wall_thickness, wall_height, arena_size*2), Vector3(arena_size, wall_height/2, 0), wall_color),
-        static_box(Vector3(wall_thickness, wall_height, arena_size*2), Vector3(-arena_size, wall_height/2, 0), wall_color),
+        static_box(Vector3(arena_size * 2, wall_height, wall_thickness), Vector3(0, wall_height / 2, arena_size),
+                   wall_color),
+        static_box(Vector3(arena_size * 2, wall_height, wall_thickness), Vector3(0, wall_height / 2, -arena_size),
+                   wall_color),
+        static_box(Vector3(wall_thickness, wall_height, arena_size * 2), Vector3(arena_size, wall_height / 2, 0),
+                   wall_color),
+        static_box(Vector3(wall_thickness, wall_height, arena_size * 2), Vector3(-arena_size, wall_height / 2, 0),
+                   wall_color),
     ]
 
     # --- Central Platform (sand color) ---
@@ -243,6 +288,7 @@ def build_map():
 
     return objects
 
+
 def move(player, data):
     # --- Ensure correct data size ---
     if len(data) != 10:
@@ -254,7 +300,6 @@ def move(player, data):
     qx, qy, qz, qw = data[3:7]
     vx, vy, vz = data[7:10]
 
-
     player.position.x = px
     player.position.y = py
     player.position.z = pz
@@ -264,37 +309,41 @@ def move(player, data):
     rb = player.get_component("Rigidbody")
     rb.velocity = Vector3(vx, vy, vz)
 
+
 def handle_packet(data, addr):
     try:
         header = data[0]
         username = data[1:9].rstrip(b'\x00').decode()
+        RoomCode = data[9:17].rstrip(b'\x00').decode()
 
-        payload = data[9:]
-        count = len(payload) // 4
+        message = data[17:]
+
+        count = len(message) // 4
         if count > 0:
-            message = list(struct.unpack(f"!{count}f", payload))
+            message = list(struct.unpack(f"!{count}f", message))
     except Exception:
         return
-    room = user_rooms.get(username)
+    room = manager.GetRoom(RoomCode)
     if room:
-        if header == 0:
-            world = rooms[room]["world"]
-            obj = world.search_by_name(username)
-            move(obj, message)
-            broadcast(room, username, message)
-        elif header == 1:
-            ip, _ = addr
-            user = rooms[room]["users"][username]
-            listen_port = user.port
-            user.ping = (time.perf_counter() - user.last_seen) * 1000
-            user.last_seen = time.perf_counter()
-            udp_socket.sendto(b"HB", (ip, listen_port))
-        elif header == 2:
-            obj = rooms[room]["world"].search_by_name(username)
-            last_seen = rooms[room]["users"][username].last_seen
-            obj.ServerController.server_controller(last_seen, message)
-            broadcast(room, username, message)
-
+        user = room.GetPlayer(username)
+        if user:
+            if header == 0:
+                world = manager.GetRoom(room).GetWorld()
+                obj = world.search_by_name(username)
+                move(obj, message)
+                broadcast(room, username, message)
+            elif header == 1:
+                ip, _ = addr
+                listen_port = user.GetPort()
+                user.SetPing((time.perf_counter() - user.last_seen) * 1000)
+                user.last_seen = time.perf_counter()
+                udp_socket.sendto(b"HB", (ip, listen_port))
+            elif header == 2:
+                world = manager.GetRoom(room).GetWorld()
+                obj = world.search_by_name(username)
+                last_seen = user.last_seen
+                obj.ServerController.server_controller(last_seen, message)
+                broadcast(room, username, message)
 
 
 def udp_server():
@@ -311,8 +360,10 @@ def main():
     print("[SERVER] Starting...")
 
     threading.Thread(target=tcp_server, daemon=True).start()
-    udp_server()   # UDP must stay on main thread
+    udp_server()  # UDP must stay on main thread
 
 
 if __name__ == "__main__":
     main()
+import string
+import random

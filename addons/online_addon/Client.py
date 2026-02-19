@@ -70,8 +70,7 @@ class Client:
             print("Bad UDP message:", e)
             return None
 
-
-    def Broadcast(self, header, UserName, message):
+    def Broadcast(self, header, UserName, room, message):
         """Send message to server's UDP broadcast system (binary protocol)."""
 
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -84,15 +83,21 @@ class Client:
         # --- username: 8 bytes ---
         if isinstance(UserName, str):
             UserName = UserName.encode("utf-8")
+        username_bytes = UserName[:8].ljust(8, b'\x00')
 
-        username_bytes = UserName[:8].ljust(8, b'\x00')  # pad or cut to 8 bytes
+        # --- room: 8 bytes ---
+        if isinstance(room, str):
+            room = room.encode("utf-8")
+        room_bytes = room[:8].ljust(8, b'\x00')
+
+        # --- message: variable ---
         if isinstance(message, str):
             message_bytes = message.encode("utf-8")
         else:
             message_bytes = struct.pack(f"!{len(message)}f", *message)
 
         # --- final packet ---
-        packet = header_byte + username_bytes + message_bytes
+        packet = header_byte + username_bytes + room_bytes + message_bytes
 
         udp.sendto(packet, (self.server_host, self.server_udp_port))
 
@@ -111,4 +116,4 @@ if __name__ == "__main__":
 
     # while True:
     #     msg = input()
-    c.Broadcast(b'\x00',"Yaly", "gf")
+    # c.Broadcast(b'\x00',"Yaly", "gf")
