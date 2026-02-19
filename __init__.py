@@ -8,6 +8,7 @@ from .Camera import Camera
 from .MeshRander import MeshRander
 from .World import World
 from .FixedJoint import FixedJoint
+from .HingeJoint import HingeJoint
 from .render import BereshitRenderer as Render
 from .render import Text as Text
 from .ContactPoint import ContactManifold

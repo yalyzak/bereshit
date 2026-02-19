@@ -1,126 +1,130 @@
-from bereshit import Vector3, Object
+import numpy as np
+from bereshit.Vector3 import Vector3
+
+
+def skew(v: Vector3):
+    x, y, z = v.x, v.y, v.z
+    return np.array([
+        [0, -z, y],
+        [z, 0, -x],
+        [-y, x, 0]
+    ])
 
 
 class FixedJoint:
-    def __init__(self, other_object, anchor_scale=0.0):
-        self.other_object = other_object
-        self.bodyA = None  # Will be filled in at attach time
-        self.bodyB = other_object.get_component("Rigidbody")
+    def __init__(self, body_b):
+        self.body_b = body_b
 
-        # --- choose 3 non-collinear local anchors on A ---
-        d = anchor_scale
-        self.localA = [
-            Vector3( d, 0, 0),
-            Vector3( 0, d, 0),
-            Vector3( 0, 0, d),
-        ]
-
-        # --- compute matching local anchors on B ---
-        self.localB = []
-        self.rest_lengths = []
 
     def attach(self, owner_object):
-        self.bodyA = owner_object.get_component("Rigidbody")
-        self.gizmo = [Object(size=Vector3(0.1,0.1,0.1)) for _ in range(3*2)]
-        gimos_contianer = Object(children=self.gizmo,size=Vector3(0,0,0))
-        self.bodyA.parent.add_child(gimos_contianer)
 
-        for i, la in enumerate(self.localA):
-            # world position of anchor on A
-            wa = (
-                self.bodyA.parent.position
-                + self.bodyA.parent.quaternion.rotate(la)
-            )
-            self.gizmo[i].position = wa
+        self.body_a = owner_object
 
-            # convert world anchor to B local space
-            lb = self.bodyB.parent.quaternion.inverse().rotate(
-                wa - self.bodyB.parent.position
-            )
+        self.a = self.body_a.get_component("Rigidbody")
+        self.b = self.body_b.get_component("Rigidbody")
 
-            self.localB.append(lb)
-            self.rest_lengths.append(0.0)  # welded
+        # Store initial relative transform
+        self.local_offset = self.body_b.position - self.body_a.position
+        self.initial_rel_rot = (
+            self.body_a.quaternion.inverse() *
+            self.body_b.quaternion
+        )
+        world_anchor = (self.body_a.position + self.body_b.position) * 0.5
+
+        self.local_anchor_a = self.body_a.quaternion.inverse().rotate(world_anchor - self.body_a.position)
+        self.local_anchor_b = self.body_b.quaternion.inverse().rotate(world_anchor - self.body_b.position)
+
+
+
+
         return "joint"
+
+
+    def solve(self, dt):
+        if not self.a.isKinematic:
+            self.a.velocity += (self.a.force / self.a.mass) * dt
+            self.a.force = Vector3()
+        if not self.b.isKinematic:
+            self.b.velocity += (self.b.force / self.b.mass) * dt
+            self.b.force = Vector3()
+        self.solve_linear(dt)
+        self.solve_angular(dt)
+
+
     # --------------------------------------------------
-    # solve ONE distance constraint (this is your solver)
+    # Proper 3D linear constraint with angular couplingd
     # --------------------------------------------------
-    def _solve_point(self, localA, localB, rest_length, dt):
-        A = self.bodyA
-        B = self.bodyB
+    def solve_linear(self, dt):
+        IA = self.a.Iinv_world()
+        IB = self.b.Iinv_world()
 
-        if A.isKinematic and B.isKinematic:
-            return
+        rA = self.body_a.quaternion.conjugate().rotate(self.local_anchor_a)
+        rB = self.body_b.quaternion.conjugate().rotate(self.local_anchor_b)
 
-        # world anchors
-        rA = A.parent.quaternion.rotate(localA)
-        rB = B.parent.quaternion.rotate(localB)
+        # Velocity at anchors
+        vA = self.a.velocity + self.a.angular_velocity.cross(-rA)
+        vB = self.b.velocity + self.b.angular_velocity.cross(-rB)
 
-        xA = A.parent.position + rA
-        xB = B.parent.position + rB
+        rv = vB - vA
 
-        d = xB - xA
-        dist = d.magnitude()
-        if dist == 0:
-            return
+        # Position error
+        world_anchor_A = self.body_a.position + rA
+        world_anchor_B = self.body_b.position + rB
+        error = world_anchor_B - world_anchor_A
 
-        n = d / dist
+        beta = 0.0
+        bias = error * (beta / dt)
 
-        # velocities at anchor
-        vA = A.velocity + A.angular_velocity.cross(rA)
-        vB = B.velocity + B.angular_velocity.cross(rB)
-        v_rel = vB - vA
+        inv_mass = self.a.inv_mass + self.b.inv_mass
 
-        # constraint
-        C = dist - rest_length
-        beta = 0.2
-        bias = beta * C / dt
-        Cdot = v_rel.dot(n)
-
-        # inverse mass
-        invMassA = 0.0 if A.isKinematic else 1.0 / A.mass
-        invMassB = 0.0 if B.isKinematic else 1.0 / B.mass
-
-        invIA = A.Iinv_world()
-        invIB = B.Iinv_world()
-
-        raCn = rA.cross(n).to_np()
-        rbCn = rB.cross(n).to_np()
-
-        eff_mass = (
-            invMassA + invMassB
-            + raCn @ invIA @ raCn
-            + rbCn @ invIB @ rbCn
+        K = (
+                inv_mass * np.identity(3)
+                + skew(rA) @ IA @ skew(rA).T
+                + skew(rB) @ IB @ skew(rB).T
         )
 
-        if eff_mass == 0:
-            return
+        impulse = -np.linalg.solve(K, (rv + bias).to_np())
 
-        # impulse
-        lambda_n = -(Cdot + bias) / eff_mass
-        J = n * lambda_n
+        J = Vector3.from_np(impulse)
 
-        # apply
-        if not A.isKinematic:
-            A.velocity -= J * invMassA
-            A.angular_velocity -= Vector3.from_np(
-                invIA @ rA.cross(J).to_np()
-            )
+        # Linear impulse
+        self.a.velocity -= J * self.a.inv_mass
+        self.b.velocity += J * self.b.inv_mass
 
-        if not B.isKinematic:
-            B.velocity += J * invMassB
-            B.angular_velocity += Vector3.from_np(
-                invIB @ rB.cross(J).to_np()
-            )
+        # Angular impulse
+        self.a.angular_velocity += Vector3.from_np(
+            IA @ np.cross(rA.to_np(), impulse)
+        )
+        self.b.angular_velocity -= Vector3.from_np(
+            IB @ np.cross(rB.to_np(), impulse)
+        )
 
-    # --------------------------------------------------
-    # solve FIXED joint (3 points)
-    # --------------------------------------------------
-    def solve(self, dt, iterations=10):
-        for _ in range(iterations):
-            for i in range(3):
-                self._solve_point(
-                    self.localA[i],
-                    self.localB[i],
-                    self.rest_lengths[i],
-                    dt
-                )
+    def solve_angular(self, dt):
+        IA = self.a.Iinv_world()
+        IB = self.b.Iinv_world()
+
+        q_rel = (
+                self.body_a.quaternion.inverse() *
+                self.body_b.quaternion
+        )
+
+        q_error = q_rel * self.initial_rel_rot.inverse()
+
+        error = Vector3(q_error.x, q_error.y, q_error.z)
+        if q_error.w < 0:
+            error = error * -1
+
+        angular_error = error * 2.0
+
+        beta = 0.0
+        bias = angular_error * (beta / dt)
+
+        rel_w = self.b.angular_velocity - self.a.angular_velocity
+
+        K = IA + IB
+
+        impulse = -np.linalg.solve(K, (rel_w + bias).to_np())
+
+        self.a.angular_velocity -= Vector3.from_np(IA @ impulse)
+        self.b.angular_velocity += Vector3.from_np(IB @ impulse)
+

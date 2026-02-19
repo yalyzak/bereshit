@@ -60,9 +60,13 @@ class MeshRander:
             raise ValueError("Must provide either a shape, .obj path, or both vertices and edges")
         return "Mesh"
 
-    def __init__(self, vertices=None, edges=None, shape=None, triangles=None, obj_path=None):
+    def __init__(self, vertices=None, edges=None, shape=None, triangles=None, obj_path=None, size=None):
         self._shape = shape
         self.colors = None
+        if size:
+            self._size = size.to_np()
+        else:
+            self._size = Vector3(1,1,1).to_np()
         self.ctx = moderngl.create_standalone_context()
         self._vertices = vertices
         self._edges = edges
@@ -93,7 +97,7 @@ class MeshRander:
         # Convert vertices
         # vertices = [Vector3(*v) for v in mesh.vertices]
         # Convert and center vertices
-        vertices = [Vector3(*v) for v in mesh.vertices]
+        vertices = [Vector3(*v) for v in mesh.vertices * self._size]
         centroid = Vector3(0,0,0)
         vertices = [v - centroid for v in vertices]
 

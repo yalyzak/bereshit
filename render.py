@@ -145,6 +145,9 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.meshes = []
         self.prepare_meshes()
 
+        self.texture = self.ctx.texture(self.window_size, 4)
+        self.texture.filter = (moderngl.LINEAR, moderngl.LINEAR)
+
     def GetKeyDown(self):
         keys = self.wnd.keys
         string = ""
@@ -342,20 +345,25 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.ctx.enable(moderngl.DEPTH_TEST)
 
     def render_text(self):
-
-        # === 1. Create text image using Pillow ===
         img = Image.new("RGBA", self.window_size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
+
         for text in self.text_elements:
             font_size = int(64 * text.scale)
             font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", font_size)
-            draw.text((text.center), text.text, font=font, fill=text.color + (int(255 * text.opacity),))
+            draw.text(
+                text.center,
+                text.text,
+                font=font,
+                fill=text.color + (int(255 * text.opacity),)
+            )
 
         text_data = np.array(img).astype('u1')
 
-        # === 2. Upload to OpenGL as a texture ===
-        self.texture = self.ctx.texture(self.window_size, 4, text_data.tobytes())
-        self.texture.use()
+        # ✅ Update existing texture instead of recreating it
+        self.texture.write(text_data.tobytes())
+        self.texture.use(location=0)
+        self.text_vbo.render(moderngl.TRIANGLE_STRIP)
 
     # def render_box(self):
     #
@@ -499,7 +507,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
 
         # --- Render UI on top ---
         ### memory leak on the ui
-        # self.render_text()
+        self.render_text()
         # self.render_ui()
         # self.text_vbo.render(moderngl.TRIANGLE_STRIP)
         ### memory leak on the ui

@@ -23,6 +23,7 @@ class Rigidbody:
                  center_of_mass=Vector3(0, 0, 0), velocity=None, angular_velocity=None, force=None,
                  isKinematic=False, useGravity=True, drag=0.98, friction_coefficient=0.6, restitution=0.6,COM=None, Freeze_Rotation=None):
         self.mass = mass
+        self.inv_mass = 1 / mass
         self.material = ""
         self.drag = drag
         self.obj = obj
@@ -62,12 +63,23 @@ class Rigidbody:
             rb1.velocity -= impulse_vec / rb1.mass
             torque_impulse = r1.cross(impulse_vec)
             ang_impulse = Vector3.from_np(rb1.Iinv_world() @ torque_impulse.to_np())
-            rb1.angular_velocity += ang_impulse
+            if rb1.Freeze_Rotation.x == 0:
+                rb1.angular_velocity.x += ang_impulse.x
+            if rb1.Freeze_Rotation.y == 0:
+                rb1.angular_velocity.y += ang_impulse.y
+            if rb1.Freeze_Rotation.z == 0:
+                rb1.angular_velocity.z += ang_impulse.z
         if rb2 and not rb2.isKinematic:
             rb2.velocity += impulse_vec / rb2.mass
             torque_impulse = r2.cross(impulse_vec)
             ang_impulse = Vector3.from_np(rb2.Iinv_world() @ torque_impulse.to_np())
-            rb2.angular_velocity -= ang_impulse
+            if rb2.Freeze_Rotation.x == 0:
+                rb2.angular_velocity.x -= ang_impulse.x
+            if rb2.Freeze_Rotation.y == 0:
+                rb2.angular_velocity.y -= ang_impulse.y
+            if rb2.Freeze_Rotation.z == 0:
+                rb2.angular_velocity.z -= ang_impulse.z
+
         v1 = rb1.velocity if not rb1.isKinematic else Vector3()
         v2 = rb2.velocity if not rb2.isKinematic else Vector3()
 
@@ -204,8 +216,8 @@ class Rigidbody:
         self.angular_velocity += self.angular_acceleration * dt
         w = self.angular_velocity
         mag = w.magnitude()
-        # if mag > 0:
-        #     self.angular_velocity -= w.normalized() * (0.05 * mag * dt / (1/60))
+        if mag > 0:
+            self.angular_velocity -= w.normalized() * (0.05 * mag * dt / (1/60))
 
         self.parent.quaternion = Quaternion.euler_radians(ang_disp) * self.parent.quaternion
 
