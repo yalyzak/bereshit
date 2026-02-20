@@ -93,8 +93,13 @@ class Client:
         # --- message: variable ---
         if isinstance(message, str):
             message_bytes = message.encode("utf-8")
+        elif isinstance(message, bytes):
+            message_bytes = message
         else:
-            message_bytes = struct.pack(f"!{len(message)}f", *message)
+            json_data = json.dumps(message)
+
+            # Convert to bytes
+            message_bytes = json_data.encode()
 
         # --- final packet ---
         packet = header_byte + username_bytes + room_bytes + message_bytes
