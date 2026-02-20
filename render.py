@@ -288,7 +288,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
                     continue
 
                 # Convert vertices to numpy (scaled and centered)
-                verts = [v.to_np() for v in obj.Mesh.vertices()]
+                verts = [(v * obj.size * 0.25).to_np() for v in obj.Mesh.vertices()]
 
                 # Build triangle vertex list
                 triangles = []
