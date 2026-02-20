@@ -8,7 +8,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from bereshit import Object, Vector3, Core, Camera, Quaternion, BoxCollider, Rigidbody, Material
-from bereshit.addons.online_addon import ServerController
+from bereshit.addons.essentials import debug
+from bereshit.addons.online_addon import ServerController,InputMovementController
 
 HOST = "0.0.0.0"
 TCP_PORT = 5000
@@ -33,6 +34,8 @@ class User:
         self._ping = ping
     def GetPing(self):
         return self._ping
+    def GetIP(self):
+        return self._ip
 
     def GetPort(self):
         return self._port
@@ -99,13 +102,11 @@ class RoomManager:
 manager = RoomManager()
 
 def serverObject(name):
- return Object(name=name, position=Vector3(0, 5, 0)).add_component(
-                        [BoxCollider(), Rigidbody(useGravity=True), ServerController()])
+    return Object(name=name, position=Vector3(0, 4, 0)).add_component([BoxCollider(), Rigidbody(useGravity=False, Freeze_Rotation=Vector3(1,1,1)), InputMovementController()])
 
 # ---------------------------------------------------
 # TCP HANDLER (room creation, joining)
 # ---------------------------------------------------
-
 
 def handle_tcp_client(conn, addr):
     print("[TCP] Connection from", addr)
@@ -118,6 +119,7 @@ def handle_tcp_client(conn, addr):
 
             msg = json.loads(data.decode())
             action = msg.get("action")
+
 
             # --- Create Room ---
             if action == "create_room":
@@ -187,9 +189,14 @@ udp_socket.bind((HOST, UDP_PORT))
 
 
 def broadcast(room, sender, message):
-    room = manager.GetRoom(room)
-    if room:
-        players = room.GetAllPlayers()
+    players = room.GetAllPlayers()
+    for player in players:
+        username, ip, port = player.GetName(), player.GetIP(), player.GetPort()
+        payload = json.dumps({
+            "from": sender,
+            "message": message
+        }).encode()
+        udp_socket.sendto(payload, (ip, port))
 
     # for username, (ip, port) in rooms[room]["users"].items():
     #     if username != sender:
@@ -291,6 +298,8 @@ def build_map():
 
 def move(player, data):
     # --- Ensure correct data size ---
+    keys = data["keys"]
+
     if len(data) != 10:
         print("Bad message size from", len(data))
         return
@@ -315,12 +324,14 @@ def handle_packet(data, addr):
         header = data[0]
         username = data[1:9].rstrip(b'\x00').decode()
         RoomCode = data[9:17].rstrip(b'\x00').decode()
+        if header != 1:
+            message = json.loads(data[17:].decode())
 
-        message = data[17:]
 
-        count = len(message) // 4
-        if count > 0:
-            message = list(struct.unpack(f"!{count}f", message))
+
+        # count = len(message) // 4
+        # if count > 0:
+        #     message = list(struct.unpack(f"!{count}f", message))
     except Exception:
         return
     room = manager.GetRoom(RoomCode)
@@ -328,9 +339,11 @@ def handle_packet(data, addr):
         user = room.GetPlayer(username)
         if user:
             if header == 0:
-                world = manager.GetRoom(room).GetWorld()
+                world = room.GetWorld()
                 obj = world.search_by_name(username)
-                move(obj, message)
+
+                obj.InputMovementController.move_with_input(message)
+
                 broadcast(room, username, message)
             elif header == 1:
                 ip, _ = addr
@@ -338,12 +351,12 @@ def handle_packet(data, addr):
                 user.SetPing((time.perf_counter() - user.last_seen) * 1000)
                 user.last_seen = time.perf_counter()
                 udp_socket.sendto(b"HB", (ip, listen_port))
-            elif header == 2:
-                world = manager.GetRoom(room).GetWorld()
-                obj = world.search_by_name(username)
-                last_seen = user.last_seen
-                obj.ServerController.server_controller(last_seen, message)
-                broadcast(room, username, message)
+            # elif header == 2:
+            #     world = room.GetWorld()
+            #     obj = world.search_by_name(username)
+            #     last_seen = user.last_seen
+            #     obj.ServerController.server_controller(last_seen, message)
+            #     broadcast(room, username, message)
 
 
 def udp_server():
@@ -365,5 +378,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-import string
-import random
+
