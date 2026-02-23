@@ -1,10 +1,8 @@
-pip install numpy
-pip install moderngl
-pip install keyboard
-pip install moderngl_window
-pip install pyrr
-pip install mouse
-pip install glfw
-pip install open3d
-pip install trimesh matplotlib
-pip install pyserial
+numpy
+moderngl
+moderngl_window
+pyrr
+glfw
+open3d
+trimesh
+matplotlib
