@@ -446,8 +446,8 @@ class BoxCollider:
         a_center = self.obj.position
         b_center = other_collider.obj.position
 
-        a_axes = self._get_axes(self.obj.quaternion.conjugate())
-        b_axes = self._get_axes(other_collider.obj.quaternion)
+        a_axes = self._get_axes(self.obj.quaternion)
+        b_axes = self._get_axes(other_collider.obj.quaternion.conjugate())
 
         a_half = self.obj.size * 0.5
         b_half = other_collider.obj.size * 0.5

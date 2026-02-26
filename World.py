@@ -96,28 +96,27 @@ class World:
 
         # STEP 1: Collect all contacts (use ALL manifold points)
         for i in range(len(children)):
-            obj1 = children[i]
-            rb1 = obj1.get_component("Rigidbody")
-            collider = obj1.get_component("Collider")
+            first_obj = children[i]
+            first_rb = first_obj.get_component("Rigidbody")
+            first_collider = first_obj.get_component("Collider")
 
             for j in range(i + 1, len(children)):
-                obj2 = children[j]
-                rb2 = obj2.get_component("Rigidbody")
-                collider2 = obj2.get_component("Collider")
+                second_obj = children[j]
+                second_rb = second_obj.get_component("Rigidbody")
+                second_collider = second_obj.get_component("Collider")
 
                 # Skip if neither has a Rigidbody or both are kinematic
-                if (rb1 is None or rb1.isKinematic) and (rb2 is None or rb2.isKinematic):
+                if (first_rb is None or first_rb.isKinematic) and (second_rb is None or second_rb.isKinematic):
                     continue
 
-                result = collider.check_collision(collider2, single_point=True)
+                result = first_collider.check_collision(second_collider, single_point=True)
                 if result is None:
                     continue
 
                 contact_points, rb = result  # contact_points = [(cp, n, pn), ...]
                 c1, c2 = rb
                 rb1, rb2 = c1.parent.Rigidbody, c2.parent.Rigidbody
-                for _ in range(20):
-                    contacts = []
+                for _ in range(1):
                     contacts2 = []
                     if type(contact_points[0]) == tuple:  # For each point in the manifold, add a separate constraint
                         for (contact_point, normal, penetration) in contact_points:
