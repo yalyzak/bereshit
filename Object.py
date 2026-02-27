@@ -268,7 +268,7 @@ class Object:
 
     def get_all_colliders(self):
         all_bereshit = []
-        collider = self.get_component("collider")
+        collider = self.get_component("Collider")
         if collider:
             all_bereshit.append(self)
         for child in self.get_all_children():
@@ -380,7 +380,7 @@ class Object:
         all_objs = []
         for child in self.children:
             rb = child.get_component("Rigidbody")
-            collider = child.get_component("collider")
+            collider = child.get_component("Collider")
             if rb and collider:
                 all_objs.append(child)
             all_objs.extend(child.get_all_children_physics())
@@ -390,7 +390,7 @@ class Object:
         all_objs = []
         for child in self.children:
             rb = child.get_component("Rigidbody")
-            # collider = child.get_component("collider")
+            # collider = child.get_component("Collider")
             if not rb:
                 all_objs.append(child)
             all_objs.extend(child.get_all_children_physics())

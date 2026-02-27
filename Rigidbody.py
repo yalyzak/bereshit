@@ -47,9 +47,9 @@ class Rigidbody:
 
         self.normal_force = Vector3()
         self._COM = COM
-    def apply_gravity(self):
+    def apply_gravity(self, Gravity):
         if self.useGravity:
-            self.force += World.World.Gravity * self.mass
+            self.force += Gravity * self.mass
     def _resolve_dynamic_collision(self, other, normal, J, r1, r2):
         """
         Applies linear and angular impulse to both dynamic bodies, factoring restitution.

@@ -16,10 +16,10 @@ class World:
         self.Camera = self.search_by_component('Camera')
         self.gizmos = gizmos
         self.manifold_cache = {}
-        World.Gravity = gravity
-        World.tick = tick
-        World.speed = speed
-        World.Objects = self.get_all_children()
+        self.gravity = gravity
+        self.tick = tick
+        self.speed = speed
+        self.objects = self.get_all_children()
 
 
 
@@ -64,11 +64,10 @@ class World:
             all_objs.extend(child.get_all_children_physics())
         return all_objs
 
-    @staticmethod
-    def apply_gravity(children):
+    def apply_gravity(self, children):
         for child in children:
             rb = child.get_component("Rigidbody")
-            rb.apply_gravity()
+            rb.apply_gravity(self.gravity)
 
     @staticmethod
     def solve_joints(children, dt):
@@ -167,7 +166,7 @@ class World:
                         traceback.print_exc()
 
     def update(self, check=True, gizmos=False):
-        dt = World.tick
+        dt = self.tick
         FirstIteration = True
         allchildren = self.get_all_children()
 
