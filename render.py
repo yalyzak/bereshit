@@ -85,7 +85,8 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         ], dtype='f4')
 
         self.text_vbo = self.ctx.buffer(vertices.tobytes())
-        self.text_vbo = self.ctx.vertex_array(
+
+        self.text_vao = self.ctx.vertex_array(
             self.text_prog,
             [(self.text_vbo, '2f 2f', 'in_vert', 'in_tex')]
         )
@@ -363,7 +364,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         # ✅ Update existing texture instead of recreating it
         self.texture.write(text_data.tobytes())
         self.texture.use(location=0)
-        self.text_vbo.render(moderngl.TRIANGLE_STRIP)
+        self.text_vao.render(moderngl.TRIANGLE_STRIP)
 
     # def render_box(self):
     #
