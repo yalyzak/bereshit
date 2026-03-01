@@ -11,7 +11,8 @@ from bereshit.ContactPoint import ContactPoint
 from bereshit.ContactPoint import ContactManifold
 
 class World:
-    def __init__(self, children=None,gizmos=False,gravity=Vector3(0, -9.8, 0),tick=None,speed=None):
+    def __init__(self, running_flag, children=None,gizmos=False,gravity=Vector3(0, -9.8, 0),tick=None,speed=None):
+        self.RunningFlag = running_flag
         self.children = children or []
         self.Camera = self.search_by_component('Camera')
         self.gizmos = gizmos
@@ -20,6 +21,8 @@ class World:
         self.tick = tick
         self.speed = speed
         self.objects = self.get_all_children()
+        for obj in self.objects:
+            obj.World = self
 
 
 
@@ -203,3 +206,7 @@ class World:
 
         for child in allchildren:
             child.rotation = child.quaternion.to_euler()
+
+    def Exit(self, code=None):
+        self.RunningFlag[0] = False
+
