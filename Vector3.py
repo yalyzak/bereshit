@@ -148,6 +148,9 @@ class Vector3:
         """Create a Vector3 from a NumPy array or list."""
         return cls(arr[0], arr[1], arr[2])
 
+    @classmethod
+    def Lerp(clas, start, end, t):
+        return start + (end - start) * t
     def magnitude(self):
         return (self.x ** 2 + self.y ** 2 + self.z ** 2) ** 0.5
 
