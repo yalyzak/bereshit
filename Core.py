@@ -67,7 +67,7 @@ def run(scene,speed=1, gizmos=False, scriptRefreshRate=60,tick=1/60, Render=True
             logic_thread = threading.Thread(target=start_async_loop, daemon=True,args=([Initialize]))
             logic_thread.start()
             # Start rendering in main thread
-            render.run_renderer(world,Initialize)
+            render.run_renderer(world,Initialize, Exit)
         else:
             logic_thread = threading.Thread(target=start_async_loop, daemon=True)
             logic_thread.start()

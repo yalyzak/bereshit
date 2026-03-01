@@ -55,6 +55,8 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.cam = self.camera_obj.Camera
         self.cam.render = self
         self.Initialize[0] = True
+
+
         self.fov = self.cam.FOV
         self.viewer_distance = self.cam.VIEWER_DISTANCE
         self.ortho_projection = Matrix44.orthogonal_projection(
@@ -403,8 +405,9 @@ class BereshitRenderer(moderngl_window.WindowConfig):
 
     def add_ui_rect(self, box):
         self.ui_elements.append(box)
-
     def on_render(self, time: float, frametime: float):
+        if self.camera_obj.World.RunningFlag[0]:
+            self.wnd.close()
         # collect all scene objects (root + children)
         scene_objs = self.root_object.get_all_children()
 
@@ -515,8 +518,9 @@ class BereshitRenderer(moderngl_window.WindowConfig):
 
 
 
-def run_renderer(root_object, Initialize):
+def run_renderer(root_object, Initialize, Exit):
     BereshitRenderer.Initialize = Initialize
+    BereshitRenderer.Exit = Exit
     BereshitRenderer.root_object = root_object  # 👈 inject your object here
     moderngl_window.run_window_config(BereshitRenderer, args=['--window', 'glfw'])
 

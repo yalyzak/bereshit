@@ -208,5 +208,5 @@ class World:
             child.rotation = child.quaternion.to_euler()
 
     def Exit(self, code=None):
-        self.RunningFlag[0] = False
+        self.RunningFlag[0] = True
 
