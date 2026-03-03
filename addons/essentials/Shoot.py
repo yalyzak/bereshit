@@ -43,7 +43,7 @@ class Shoot:
         # if mouse.is_pressed("left"):
         #     print(self.timer)
         # self.shoot.opacity = random.Random()
-        if mouse.is_pressed("left") and self.timer >= 0.2:
+        if mouse.is_pressed("left") and self.timer >= 0.05:
             # self.shoot.opacity = 1
             self.onClick()
             self.timer = 0.0
