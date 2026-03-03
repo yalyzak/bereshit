@@ -6,11 +6,10 @@ from bereshit.render import Text,Box
 
 import copy
 class Shoot:
-    def __init__(self,target):
+    def __init__(self):
         self.cooldown = 0.01   # seconds between shots
         self.timer = 0.0      # time passed since last shot
         self.speed = 10
-        self.target = target
         self.force = 20
         self.shots = 10
         self.shots_text = Text(str(self.shots), center=(120,850), scale=1)
@@ -25,9 +24,9 @@ class Shoot:
         self.shots_text.text = str(self.shots)
         # self.render.t = str(self.shots)
         forward = self.parent.quaternion.rotate(Vector3(0,0,1))
-        hits = Physics.RaycastAll(self.parent.position.to_np(),forward.to_np())
+        hits = Physics.RaycastAll(self.parent.position.to_np(),forward.to_np(), self.parent.World)
         for hit in hits:
-            if hit.point is not None and hit.collider.parent.get_component(self.target):
+            if hit.point is not None:
                 hit.collider.parent.Rigidbody.AddForce(forward * self.force,Vector3.from_np(hit.point))#,Vector3.from_np(hit.point)
             # self.gimos.position = Vector3.from_np(hit)
     def Start(self):
@@ -41,10 +40,11 @@ class Shoot:
 
         # advance the timer
         self.timer += dt
+        # if mouse.is_pressed("left"):
+        #     print(self.timer)
         # self.shoot.opacity = random.Random()
         if mouse.is_pressed("left") and self.timer >= 0.2:
             # self.shoot.opacity = 1
-
             self.onClick()
             self.timer = 0.0
             # self.cooldown = 1

@@ -38,10 +38,10 @@ class Physics:
                         hit = temphit
         return hit
     @staticmethod
-    def RaycastAll(origin, direction, maxDistance=float('inf')):
+    def RaycastAll(origin, direction, world, maxDistance=float('inf')):
         hits = []
-        for object in World.Objects:
-            collider = object.get_component("collider")
+        for object in world.get_all_children():
+            collider = object.get_component("Collider")
             if collider:
                 hit = collider.Raycast(origin, direction, maxDistance)
                 if hit.point is not None:
