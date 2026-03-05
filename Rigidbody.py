@@ -91,7 +91,9 @@ class Rigidbody:
 
         v_rel = v2_point - v1_point  # ✅ B − A
         v_norm = v_rel.dot(normal)
-    def solve_impulse(rb1, rb2, contact_point, normal, penetration, dt):
+
+    @staticmethod
+    def solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction= False):
 
         if not rb1.isKinematic:
             rb1.velocity += (rb1.force / rb1.mass) * dt
@@ -133,8 +135,8 @@ class Rigidbody:
         J = -(1 + restitution) * v_norm / inv_eff_mass
 
         rb1._resolve_dynamic_collision(rb2, normal, J, r1, r2)
-
-        rb1._apply_friction_impulse(rb2, normal, J, contact_point)
+        if apply_friction:
+            rb1._apply_friction_impulse(rb2, normal, J, contact_point)
 
     def _apply_friction_impulse(self, other, normal, J, contact_point):
         """
@@ -176,7 +178,6 @@ class Rigidbody:
 
         if denom == 0.0:
             return
-
         Jt_magnitude /= denom
         max_friction = mu * J
         Jt_magnitude = max(-max_friction, min(Jt_magnitude, max_friction))
@@ -216,8 +217,8 @@ class Rigidbody:
         self.angular_velocity += self.angular_acceleration * dt
         w = self.angular_velocity
         mag = w.magnitude()
-        if mag > 0:
-            self.angular_velocity -= w.normalized() * (0.05 * mag * dt / (1/60))
+        # if mag > 0:
+        #     self.angular_velocity -= w.normalized() * (0.05 * mag * dt / (1/60))
 
         self.parent.quaternion = Quaternion.euler_radians(ang_disp) * self.parent.quaternion
 
@@ -236,7 +237,7 @@ class Rigidbody:
         """
         Returns the friction coefficient for the pair of materials.
         """
-
+        return min(self.friction_coefficient, other_rb.friction_coefficient) # needs to better config friction_coefficient
         if not other_rb:
             return self.friction_coefficient
         if self.friction_coefficient != Rigidbody._default_friction or other_rb.friction_coefficient != Rigidbody._default_friction:

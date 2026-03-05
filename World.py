@@ -81,7 +81,14 @@ class World:
             joint = child.get_component("joint")
             if joint is not None:
                 joint.solve(dt)
-
+    def solve_collectionsLastIteration(self, dt, contacts):
+        for contact_points in contacts:
+            for contact in contact_points:
+                contact_point = contact['contact_point']
+                normal = contact['normal']
+                rb1, rb2 = contact['rb1'], contact['rb2']
+                penetration = contact['penetration']
+                Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=False)
     def solve_collections(self, dt, contacts):
         for _ in range(20):  # basically unnecessary because v_ral is always >=0 after the first iteration but doesn't
             # hurt
@@ -91,7 +98,7 @@ class World:
                     normal = contact['normal']
                     rb1, rb2 = contact['rb1'], contact['rb2']
                     penetration = contact['penetration']
-                    rb1.solve_impulse(rb2, contact_point, normal, penetration, dt)
+                    Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=False)
     def solve_collectionsFirstIteration(self, children, dt):
 
         contacts = []
@@ -124,7 +131,7 @@ class World:
                         for (contact_point, normal, penetration) in contact_points:
                             contact_point = Vector3(contact_point)
 
-                            rb1.solve_impulse(rb2, contact_point, normal, penetration, dt)
+                            Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=False)
 
                             contacts2.append({
                                 "rb1": rb1,
@@ -138,7 +145,7 @@ class World:
                     elif type(contact_points[0]) == Vector3:
                         contact_point, normal, penetration = contact_points
 
-                        rb1.solve_impulse(rb2, contact_point, normal, penetration, dt)
+                        Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=True)
 
                         contacts.append([{
                             "rb1": rb1,
@@ -178,20 +185,20 @@ class World:
                 for component in child.components.values():
                     if hasattr(component, 'Update') and component.Update is not None and component.Active == True:
                         try:
-                            component.Update(dt)
+                           component.Update(dt)
                         except Exception as e:
                             print(f"[Error] Exception in {component.__class__.__name__}.Update(): {e}")
                             traceback.print_exc()
 
         children = self.get_all_children_physics()
         self.apply_gravity(children)  # APPLY GRAVITY and external forces
+        contacts = self.solve_collectionsFirstIteration(children, dt)  # handel collisions and friction
+
         for _ in range(10):  # keeps Constraint inline
-            if FirstIteration:
-                contacts = self.solve_collectionsFirstIteration(children, dt)  # handel collisions and friction
-                FirstIteration = False
-            else:
                 self.solve_collections(dt, contacts)  # handel collisions and friction
-            self.solve_joints(children, dt)
+                self.solve_joints(children, dt)
+
+        # self.solve_collectionsLastIteration(dt, contacts)
 
         for child in children:
             rb = child.get_component("Rigidbody")
