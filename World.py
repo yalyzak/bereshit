@@ -174,6 +174,7 @@ class World:
                     except:
                         print(f"[Error] Exception in {component.__class__.__name__}.Start():")
                         traceback.print_exc()
+                        exit()
 
     def update(self, check=True, gizmos=False):
         dt = self.tick
@@ -217,3 +218,5 @@ class World:
     def Exit(self, code=None):
         self.RunningFlag[0] = True
 
+    def _remove_object(self, child):
+        self.children.remove(child)

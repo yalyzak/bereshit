@@ -102,7 +102,7 @@ class Object:
     def add_child(self, new_child):
         if new_child.parent == None:
             new_child.parent = self
-        new_child.world = self
+        new_child.World = self
 
         for i, child in enumerate(self.children):
             if child.name == new_child.name:
@@ -111,6 +111,19 @@ class Object:
         else:
             self.children.append(new_child)
             # World.Objects.append(new_child)
+
+
+
+
+    def _remove_child(self, child):
+        self.children.remove(child)
+
+    def destroy(self):
+        if self.parent:
+            self.parent._remove_child(self)
+        if self.World:
+            self.World._remove_object(self)
+        del self
 
     def add_component(self, component, name=None):
         # --- handle list input first ---
@@ -166,15 +179,15 @@ class Object:
         self.add_component(Material())
         self.add_component(MeshRander(shape="box"))
 
-        def findWorld(child):
-            parent = child.parent
-            if parent is None:
-                return child
-
-            return findWorld(parent)
-
-        for child in self.get_all_children():
-            child.world = findWorld(child)
+        # def findWorld(child):
+        #     parent = child.parent
+        #     if parent is None:
+        #         return child
+        #
+        #     return findWorld(parent)
+        #
+        # for child in self.get_all_children():
+        #     child.world = findWorld(child)
 
     def search(self, target_name):
         if hasattr(self, 'name') and self.name == target_name:
