@@ -121,8 +121,8 @@ class Object:
     def destroy(self):
         if self.parent:
             self.parent._remove_child(self)
-        if self.World:
-            self.World._remove_object(self)
+        # if self.World:
+        #     self.World._remove_object(self)
         del self
 
     def add_component(self, component, name=None):
