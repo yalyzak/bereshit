@@ -219,4 +219,5 @@ class World:
         self.RunningFlag[0] = True
 
     def _remove_object(self, child):
-        self.children.remove(child)
+        if child in self.children:
+            self.children.remove(child)
