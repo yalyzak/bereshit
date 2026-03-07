@@ -26,7 +26,7 @@ class Shoot:
         forward = self.parent.quaternion.rotate(Vector3(0,0,1))
         hits = Physics.RaycastAll(self.parent.position.to_np(),forward.to_np(), self.parent.World)
         for hit in hits:
-            if hit.point is not None:
+            if hit.point is not None and hits.collider != self.parent.Collider:
                 hit.collider.parent.Rigidbody.AddForce(forward * self.force,Vector3.from_np(hit.point))#,Vector3.from_np(hit.point)
             # self.gimos.position = Vector3.from_np(hit)
     def Start(self):
