@@ -35,6 +35,7 @@ from pyrr import Vector4, Vector3 as PyrrVector3, Quaternion as PyrrQuat, Matrix
 import numpy as np
 
 
+
 class BereshitRenderer(moderngl_window.WindowConfig):
     gl_version = (3, 3)
     title = "Bereshit moderngl Renderer"
@@ -44,6 +45,31 @@ class BereshitRenderer(moderngl_window.WindowConfig):
     resource_dir = '.'
     root_object = None  # 👈 class variable to inject data
 
+    def load_texture(self, path):
+        img = Image.open(path).convert("RGBA")
+        img = img.transpose(Image.FLIP_TOP_BOTTOM)
+
+        texture = self.ctx.texture(img.size, 4, img.tobytes())
+        texture.build_mipmaps()
+
+        texture.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
+        texture.repeat_x = True
+        texture.repeat_y = True
+
+        return texture
+
+    def image_to_texture(self, image):
+        img = image.convert("RGBA")
+        img = img.transpose(Image.FLIP_TOP_BOTTOM)
+
+        texture = self.ctx.texture(img.size, 4, img.tobytes())
+        texture.build_mipmaps()
+
+        texture.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
+        texture.repeat_x = True
+        texture.repeat_y = True
+
+        return texture
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.wnd.exit_key = None
@@ -134,6 +160,19 @@ class BereshitRenderer(moderngl_window.WindowConfig):
                     / "shaders"
                     / "solid_fragment_shader.vert"
             ).read_text(),)
+
+        self.material_prog = self.ctx.program(
+            vertex_shader=(
+                    files("bereshit")
+                    / "shaders"
+                    / "material_preview_vertex_shader.vert"
+            ).read_text(),
+            fragment_shader=(
+                    files("bereshit")
+                    / "shaders"
+                    / "material_preview_fragment_shader.vert"
+            ).read_text(), )
+        # self.material_prog["texture1"] = 0
         self.view = Matrix44.identity()
         self.projection = Matrix44.perspective_projection(self.fov, self.wnd.aspect_ratio, 0.1, 1000.0)
         self.ctx.enable(moderngl.BLEND)
@@ -150,7 +189,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
 
         self.texture = self.ctx.texture(self.window_size, 4)
         self.texture.filter = (moderngl.LINEAR, moderngl.LINEAR)
-
+        self.default_texture = self.load_texture((str(files("bereshit")) + "\\shaders" + "\\default_texture.jpg"))
     def GetKeyDown(self):
         keys = self.wnd.keys
         string = ""
@@ -199,120 +238,121 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         elif action == keys.ACTION_RELEASE and key in self.keys_down:
             self.keys_down.remove(key)
 
-    def prepare_meshes(self):
-        shading = self.cam.shading
-        if shading == "wire":
-            for obj in self.root_object.get_all_children():
+    def wire_shading(self, objs):
+        for obj in objs:
 
-                if obj.Mesh is None or obj.Mesh.vertices() == []:
-                    continue
+            if obj.Mesh is None or obj.Mesh.vertices() == []:
+                continue
 
-                # Convert vertices to numpy
-                # verts = [(v * obj.size * 0.5).to_np() for v in
-                #          obj.Mesh.vertices]  # Ensure this returns list or np.array of floats
-                verts = [v.to_np() for v in obj.Mesh.vertices()]  # no size, no 0.5
+            # Convert vertices to numpy
+            # verts = [(v * obj.size * 0.5).to_np() for v in
+            #          obj.Mesh.vertices]  # Ensure this returns list or np.array of floats
+            verts = [v.to_np() for v in obj.Mesh.vertices()]  # no size, no 0.5
 
-                lines = []
-                for i, j in obj.Mesh.edges():
-                    lines.extend(verts[i])  # 👈 flatten the vector into x, y, z
-                    lines.extend(verts[j])
+            lines = []
+            for i, j in obj.Mesh.edges():
+                lines.extend(verts[i])  # 👈 flatten the vector into x, y, z
+                lines.extend(verts[j])
 
-                vbo = np.array(lines, dtype='f4')
-                vao = self.ctx.buffer(vbo.tobytes())
+            vbo = np.array(lines, dtype='f4')
+            vao = self.ctx.buffer(vbo.tobytes())
+            self.meshes.append({
+                'obj': obj,
+                'vbo': vao,
+                'vao': self.ctx.vertex_array(
+                    self.wire_prog,
+                    [(vao, '3f', 'in_position')],
+                ),
+                'len': len(lines),
+            })
+
+    def solid_shading(self, objs):
+        for obj in objs:
+            if obj.Mesh is None:
+                continue
+
+            # Convert vertices to numpy (scaled and centered)
+            verts = [v.to_np() for v in obj.Mesh.vertices()]
+
+            # Build triangle vertex list
+            triangles = []
+            if obj.Mesh.triangles():
+                for tri in obj.Mesh.triangles():  # tri = (i, j, k)
+                    for index in tri:
+                        triangles.extend(verts[index])  # flatten x, y, z into list
+
+                vbo = np.array(triangles, dtype='f4')
+                vao_buffer = self.ctx.buffer(vbo.tobytes())
+                vao = self.ctx.vertex_array(
+                    self.solid_prog,
+                    [(vao_buffer, "3f", "in_position")]  # only position
+                )
+
                 self.meshes.append({
                     'obj': obj,
-                    'vbo': vao,
-                    'vao': self.ctx.vertex_array(
-                        self.wire_prog,
-                        [(vao, '3f', 'in_position')],
-                    ),
-                    'len': len(lines),
+                    'vbo': vao_buffer,
+                    'vao': vao,
+                    'len': len(triangles) // 3,
                 })
-        if shading == "solid":
-            for obj in self.root_object.get_all_children():
-                if obj.Mesh is None:
-                    continue
 
-                # Convert vertices to numpy (scaled and centered)
-                verts = [v.to_np() for v in obj.Mesh.vertices()]
+    def material_preview(self, objs):
+        for obj in objs:
+            if obj.Mesh is None:
+                continue
 
-                # Build triangle vertex list
-                triangles = []
-                if obj.Mesh.triangles():
-                    for tri in obj.Mesh.triangles():  # tri = (i, j, k)
-                        for index in tri:
-                            triangles.extend(verts[index])  # flatten x, y, z into list
+            verts = [v.to_np() for v in obj.Mesh.vertices()]
+            uvs = obj.Mesh.uvs()
+            uvs = uvs if uvs is not None and len(uvs) > 0 else []
 
-                    vbo = np.array(triangles, dtype='f4')
-                    vao_buffer = self.ctx.buffer(vbo.tobytes())
-                    vao = self.ctx.vertex_array(
-                        self.solid_prog,
-                        [(vao_buffer, "3f", "in_position")]  # only position
-                    )
+            vertex_data = []
 
-                    self.meshes.append({
-                        'obj': obj,
-                        'vbo': vao_buffer,
-                        'vao': vao,
-                        'len': len(triangles),
-                    })
+            for tri in obj.Mesh.triangles():
+                for index in tri:
+
+                    # position
+                    vertex_data += list(verts[index])
+
+                    # # normal (temporary placeholder)
+                    # vertex_data += [0.0, 0.0, 1.0]
+
+                    # uv
+                    if len(uvs) > 0:
+                        vertex_data += list(uvs[index])
+                    else:
+                        x, y, z = verts[index]
+                        vertex_data += [x * 0.5 + 0.5, y * 0.5 + 0.5]
+
+            vbo = np.array(vertex_data, dtype='f4')
+            vao_buffer = self.ctx.buffer(vbo.tobytes())
+
+            vao = self.ctx.vertex_array(
+                self.material_prog,
+                [(vao_buffer, "3f 2f", "in_position", "in_texcoord")]
+            )
+
+            self.meshes.append({
+                'obj': obj,
+                'vbo': vao_buffer,
+                'vao': vao,
+                'len': len(vertex_data) // 5,
+            })
+
+    def prepare_meshes(self):
+        shading = self.cam.shading
+        objs = self.root_object.get_all_children()
+        if shading == "wire":
+            self.wire_shading(objs)
+        elif shading == "solid":
+            self.solid_shading(objs)
+        elif shading == "material preview":
+            self.material_preview(objs)
 
     def prepare_missing_meshes(self, missing):
         shading = self.cam.shading
         if shading == "wire":
-            for obj in missing:
-                if obj.Mesh is None or obj.Mesh.vertices() == []:
-                    continue
-
-                # Convert vertices to numpy
-                # verts = [(v * obj.size * 0.5).to_np() for v in
-                #          obj.Mesh.vertices]  # Ensure this returns list or np.array of floats
-                verts = [v.to_np() for v in obj.Mesh.vertices()]  # no size, no 0.5
-
-                lines = []
-                for i, j in obj.Mesh.edges():
-                    lines.extend(verts[i])  # 👈 flatten the vector into x, y, z
-                    lines.extend(verts[j])
-
-                vbo = np.array(lines, dtype='f4')
-                vao = self.ctx.buffer(vbo.tobytes())
-                self.meshes.append({
-                    'obj': obj,
-                    'vbo': vao,
-                    'vao': self.ctx.vertex_array(
-                        self.wire_prog,
-                        [(vao, '3f', 'in_position')],
-                    ),
-                    'len': len(lines),
-                })
-        if shading == "solid":
-            for obj in missing:
-                if obj.Mesh is None:
-                    continue
-
-                # Convert vertices to numpy (scaled and centered)
-                verts = [v.to_np() for v in obj.Mesh.vertices()]
-
-                # Build triangle vertex list
-                triangles = []
-                if obj.Mesh.triangles():
-                    for tri in obj.Mesh.triangles():  # tri = (i, j, k)
-                        for index in tri:
-                            triangles.extend(verts[index])  # flatten x, y, z into list
-
-                    vbo = np.array(triangles, dtype='f4')
-                    vao_buffer = self.ctx.buffer(vbo.tobytes())
-                    vao = self.ctx.vertex_array(
-                        self.solid_prog,
-                        [(vao_buffer, "3f", "in_position")]  # only position
-                    )
-
-                    self.meshes.append({
-                        'obj': obj,
-                        'vbo': vao_buffer,
-                        'vao': vao,
-                        'len': len(triangles),
-                    })
+            self.wire_shading(missing)
+        elif shading == "solid":
+            self.solid_shading(missing)
 
     def cleanup_removed_meshes(self, removed_objs):
         self.meshes = [m for m in self.meshes if m['obj'] not in removed_objs]
@@ -499,6 +539,31 @@ class BereshitRenderer(moderngl_window.WindowConfig):
                 self.solid_prog['view_pos'].value = tuple(cam_pos)
 
                 # Render as filled triangles
+                item['vao'].render(mode=moderngl.TRIANGLES, vertices=item['len'])
+            elif shading == "material preview":
+                self.ctx.enable(moderngl.DEPTH_TEST)
+
+                # Set matrices
+                self.material_prog['model'].write(model.astype('f4').tobytes())
+                self.material_prog['view'].write(self.view.astype('f4').tobytes())
+                self.material_prog['projection'].write(self.projection.astype('f4').tobytes())
+
+                # Lighting uniforms
+                # self.material_prog['light_pos'].value = tuple(cam_pos)
+                # self.material_prog['light_color'].value = (1.0, 1.0, 1.0)
+                # self.material_prog['view_pos'].value = tuple(cam_pos)
+
+                # Bind texture
+                texture = obj.Mesh.texture()
+
+                if texture:
+                    if not hasattr(obj.Mesh, "gpu_texture"):
+                        obj.Mesh.gpu_texture = self.image_to_texture(texture)
+
+                    obj.Mesh.gpu_texture.use(location=0)
+                else:
+                    self.default_texture.use(location=0)
+                # Draw mesh
                 item['vao'].render(mode=moderngl.TRIANGLES, vertices=item['len'])
         # Desired rectangle size
         rect_width = 400

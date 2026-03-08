@@ -26,6 +26,13 @@ class MeshRander:
 
     def edges(self):
         return self._edges
+
+    def uvs(self):
+        return self._uv
+
+    def texture(self):
+        return self._TextureImage
+
     def attach(self, owner_object):
         self.parent = owner_object
         if self._obj_path:
@@ -63,6 +70,8 @@ class MeshRander:
     def __init__(self, vertices=None, edges=None, shape=None, triangles=None, obj_path=None, size=None):
         self._shape = shape
         self.colors = None
+        self._TextureImage = None
+        self._uv = []
         if size:
             self._size = size.to_np()
         else:
@@ -91,13 +100,18 @@ class MeshRander:
     def load_model(self):
         mesh = trimesh.load(self._obj_path, force='mesh')
 
+        # mesh_size = mesh.scale
+
+        TextureImage = mesh.visual.material.baseColorTexture
+        self._TextureImage = TextureImage
+        self._uv = mesh.visual.uv
         if not isinstance(mesh, trimesh.Trimesh):
             raise TypeError("Loaded file is not a mesh")
 
         # Convert vertices
         # vertices = [Vector3(*v) for v in mesh.vertices]
         # Convert and center vertices
-        vertices = [Vector3(*v) for v in mesh.vertices * self._size]
+        vertices = [Vector3(*v) for v in mesh.vertices * self._size ]
         centroid = Vector3(0,0,0)
         vertices = [v - centroid for v in vertices]
 
