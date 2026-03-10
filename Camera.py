@@ -4,5 +4,5 @@ class Camera:
         self.hight = hight
         self.FOV = FOV
         self.VIEWER_DISTANCE = VIEWER_DISTANCE
-        self.shading = shading
+        self.shading = shading  # wire, solid, material preview
         self.render = None
