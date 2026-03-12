@@ -44,8 +44,7 @@ class FPS_cam:
         # self.parent.quaternion *= Quaternion.euler(Vector3(0.001,0,0))
         # Get current rotation
 
-        if World.tick != 0:
-            self.s(dt)
+        self.s(dt)
 
 
         # Save
