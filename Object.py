@@ -116,7 +116,8 @@ class Object:
 
 
     def _remove_child(self, child):
-        self.children.remove(child)
+        if child in self.children:
+            self.children.remove(child)
 
     def destroy(self):
         if self.parent:
