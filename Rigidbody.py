@@ -361,7 +361,6 @@ class Rigidbody:
         # 2. Get the rotation matrix
         # If using a quaternion:
         R = self.parent.quaternion.to_matrix3()
-        R = Quaternion().to_matrix3()
 
         # 3. Transform to world space: R * I_inv * R_transpose
         return R @ I_inv_body @ R.T
