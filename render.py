@@ -126,7 +126,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
             vertex_shader=(
                     files("bereshit")
                     / "shaders"
-                    / "ui_prog.vert"
+                    / "ui_vertex_shader.vert"
             ).read_text(),
             fragment_shader=(
                     files("bereshit")
@@ -135,7 +135,9 @@ class BereshitRenderer(moderngl_window.WindowConfig):
             ).read_text(),)
         self.ui_vao = self.ctx.vertex_array(
             self.ui_prog,
-            [(self.ui_vbo, "2f 4f", "in_position", "in_color")]
+            [
+                (self.ui_vbo, "2f 2f 4f", "in_pos", "in_uv", "in_color"),
+            ],
         )
 
         # Store UI elements to draw
@@ -193,8 +195,14 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.texture = self.ctx.texture(self.window_size, 4)
         self.texture.filter = (moderngl.LINEAR, moderngl.LINEAR)
         self.default_texture = self.load_texture((str(files("bereshit")) + "\\shaders" + "\\default_texture.jpg"))
-
+        self.font_cache = {}
         self.Initialize[0] = True # must be at the end
+
+    def hide_cursor(self):
+        self.wnd.cursor = False
+
+    def show_cursor(self):
+        self.wnd.cursor = True
 
     def wire_shading(self, objs):
         for obj in objs:
@@ -420,22 +428,43 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.text_elements = []
 
     def _render_ui_element(self, element):
-        vertices = element.vertices().astype('f4')
+        vertices = element.vertices().astype("f4")
 
         self.ui_vbo.orphan(vertices.nbytes)
         self.ui_vbo.write(vertices)
 
         self.ui_prog["ortho"].write(self.ortho_projection.astype("f4").tobytes())
+        if element.texture:
+            element.texture.use(0)
+            self.ui_prog["use_texture"].value = 1
 
-        vertex_count = vertices.size // 6
+        else:
+            if element.texture_path:
+                element.texture = self.load_texture(element.texture_path)
+                element.texture.use(0)
+                self.ui_prog["use_texture"].value = 1
+            else:
+                self.ui_prog["use_texture"].value = 0
+
+        self.ui_prog["tex"].value = 0
+
+        vertex_count = vertices.size // 8  # example if vertex = x,y,u,v,r,g,b,a
         self.ui_vao.render(mode=moderngl.TRIANGLES, vertices=vertex_count)
+
+
+    def get_font(self, size):
+        if size not in self.font_cache:
+            self.font_cache[size] = ImageFont.truetype(
+                "C:/Windows/Fonts/arial.ttf", size
+            )
+        return self.font_cache[size]
 
     def _render_text_element(self, text):
         img = Image.new("RGBA", self.window_size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
 
         font_size = int(64 * text.scale)
-        font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", font_size)
+        font = self.get_font(font_size)
 
         draw.text(
             text.center,
@@ -523,6 +552,8 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         render_items.extend(self.ui_elements)
         render_items.extend(self.text_elements)
         render_items.sort(key=lambda e: e.layer)
+        if len(render_items) > 100:
+            raise Exception("too many itmes to render")
         self.render_ui()
         # self.render_text()
         # self.render_elements()
@@ -539,6 +570,7 @@ def run_renderer(root_object, Initialize, Exit):
     moderngl_window.run_window_config(BereshitRenderer, args=['--window', 'glfw'])
 
 
+
 class Text:
     def __init__(self, text="", center=(0.0, 0.0), size=(512, 128), scale=1.0, color=(255, 255, 255), opacity=1,
                  container=None, layer=0):
@@ -553,7 +585,7 @@ class Text:
 
 
 class Box:
-    def __init__(self, center=(960, 540), size=(100, 100), scale=1.0, color=(255, 255, 255), opacity=1, layer=0, container=None,
+    def __init__(self, center=(960, 540), size=(100, 100), scale=1.0, color=(255, 255, 255), opacity=1, layer=0, texture=None,container=None,
                  children=None , clickable=False):
         self.container = container
         self.children = children
@@ -563,6 +595,11 @@ class Box:
         self.color = (color[0] / 255, color[1] / 255, color[2] / 255)
         self.opacity = opacity
         self.layer = layer
+        if texture:
+            self.texture_path = texture
+        else:
+            self.texture_path = None
+        self.texture = None
 
     def click(self, position):
         return (
@@ -570,23 +607,22 @@ class Box:
                 -self.center[1] + 1080 - self.size[1] / 2 <= position[1] <= -self.center[1] + 1080 + self.size[1] / 2
         )
 
-
-
     def vertices(self):
-        r, g, b = self.color
-        a = self.opacity  # <-- add opacity
-
         hw, hh = self.size[0] / 2, self.size[1] / 2
         x, y = self.center
 
-        vertices = np.array([
-            x - hw, y - hh, r, g, b, a,
-            x + hw, y - hh, r, g, b, a,
-            x + hw, y + hh, r, g, b, a,
+        r, g, b = self.color
+        a = self.opacity  # <-- add opacity
 
-            x - hw, y - hh, r, g, b, a,
-            x + hw, y + hh, r, g, b, a,
-            x - hw, y + hh, r, g, b, a,
+        vertices = np.array([
+            # x, y, u, v, r, g, b, a
+            x - hw, y - hh, 0.0, 0.0, r, g, b, a,
+            x + hw, y - hh, 1.0, 0.0, r, g, b, a,
+            x + hw, y + hh, 1.0, 1.0, r, g, b, a,
+
+            x - hw, y - hh, 0.0, 0.0, r, g, b, a,
+            x + hw, y + hh, 1.0, 1.0, r, g, b, a,
+            x - hw, y + hh, 0.0, 1.0, r, g, b, a,
         ], dtype="f4")
 
         return vertices

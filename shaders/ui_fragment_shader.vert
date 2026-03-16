@@ -1,7 +1,17 @@
 #version 330
-in vec4 v_color;       // one input: r,g,b,a
+
+uniform sampler2D tex;
+uniform int use_texture;
+
+in vec2 uv;
+in vec4 color;
+
 out vec4 fragColor;
 
 void main() {
-    fragColor = v_color;
+
+    if (use_texture == 1)
+        fragColor = texture(tex, uv) * color;
+    else
+        fragColor = color;
 }

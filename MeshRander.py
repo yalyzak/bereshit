@@ -36,13 +36,7 @@ class MeshRander:
     def attach(self, owner_object):
         self.parent = owner_object
         if self._obj_path:
-            self._vertices, self._triangles, self._edges, self._colors, self._vertex_shader, self._fragment_shader = self.load_model()
-
-            # Compile program
-            self.prog = self.ctx.program(
-                vertex_shader=self._vertex_shader,
-                fragment_shader=self._fragment_shader,
-            )
+            self._vertices, self._triangles, self._edges, self._colors = self.load_model()
 
         elif self._shape and self._vertices is None and self._edges is None:
             generator = self.get_generator_function(self._shape)
@@ -143,38 +137,9 @@ class MeshRander:
         else:
             colors = [(1.0, 1.0, 1.0)] * len(vertices)  # default white
 
-        # Vertex Shader
-        vertex_shader = """
-      #version 330
 
-      in vec3 in_position;
-      in vec3 in_color;
 
-      uniform mat4 model;
-      uniform mat4 view;
-      uniform mat4 projection;
-
-      out vec3 v_color;
-
-      void main() {
-          gl_Position = projection * view * model * vec4(in_position, 1.0);
-          v_color = in_color;
-      }
-      """
-
-        # Fragment Shader
-        fragment_shader = """
-      #version 330
-
-      in vec3 v_color;
-      out vec4 fragColor;
-
-      void main() {
-          fragColor = vec4(v_color, 1.0);
-      }
-      """
-
-        return vertices, triangles, edges, colors, vertex_shader, fragment_shader
+        return vertices, triangles, edges, colors
 
     @staticmethod
     def generate_cube():
