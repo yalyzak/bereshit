@@ -47,7 +47,8 @@ class BereshitRenderer(moderngl_window.WindowConfig):
     root_object = None  # 👈 class variable to inject data
 
     def load_texture(self, path):
-        img = Image.open(path).convert("RGBA")
+        folder = Path(sys.argv[0]).resolve().parent
+        img = Image.open(folder / path).convert("RGBA")
         img = img.transpose(Image.FLIP_TOP_BOTTOM)
 
         texture = self.ctx.texture(img.size, 4, img.tobytes())
