@@ -59,5 +59,5 @@ class FPS_cam:
     def Start(self):
         self.render = self.parent.Camera.render
         mouse.move(CENTER_X, CENTER_Y)
-        self.total_pitch = self.parent.rotation.x
-        self.total_yaw= self.parent.rotation.y
+        self.total_pitch = math.radians(self.parent.rotation.x)
+        self.total_yaw = math.radians(self.parent.rotation.y)
