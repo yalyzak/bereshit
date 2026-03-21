@@ -615,7 +615,7 @@ class Box:
             self.texture_path = None
         self.texture = None
 
-    def click(self, position, size):
+    def click(self, position):
         # the collider is not right is the window is not full screen, should resize for the real screen size
         return (
                 self.center[0] - self.size[0] / 2 <= position[0] <= self.center[0] + self.size[0] / 2 and
