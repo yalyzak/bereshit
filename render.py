@@ -76,6 +76,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.wnd.exit_key = None
+        self.width, self.height = self.wnd.size
         self.root_object = BereshitRenderer.root_object  # 👈 assign it here
         self.camera_obj = self.root_object.search_by_component('Camera')
 
@@ -84,7 +85,11 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.cam = self.camera_obj.Camera
         self.cam.render = self
 
-        self.text_input = 0
+        self.text_input = -1
+        self.mouse_input = -1
+
+        self.mouse_pos = (0,0)
+
         self.typing = False
 
         self.fov = self.cam.FOV
@@ -400,6 +405,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.meshes = [m for m in self.meshes if m['obj'] not in removed_objs]
 
     def resize(self, width: int, height: int):
+        self.width, self.height = width, height
         self.projection = Matrix44.perspective_projection(self.fov, self.wnd.aspect_ratio, 0.1, 1000.0)
         self.ortho_projection = Matrix44.orthogonal_projection(0, width, 0, height, -1.0, 1.0)
 
@@ -556,6 +562,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         if len(render_items) > 100:
             raise Exception("too many itmes to render")
         self.render_ui()
+
         # self.render_text()
         # self.render_elements()
         # self.text_vbo.render(moderngl.TRIANGLE_STRIP)
@@ -564,6 +571,12 @@ class BereshitRenderer(moderngl_window.WindowConfig):
     def on_key_event(self, key, action, modifiers):
         if action != 0:
             self.text_input = key
+
+    def on_mouse_press_event(self, x, y, button):
+        # 1=left, 2=middle, 3=right (usually)
+        self.mouse_input = button
+        self.mouse_pos = (x, y)
+
 def run_renderer(root_object, Initialize, Exit):
     BereshitRenderer.Initialize = Initialize
     BereshitRenderer.Exit = Exit
@@ -602,7 +615,8 @@ class Box:
             self.texture_path = None
         self.texture = None
 
-    def click(self, position):
+    def click(self, position, size):
+        # the collider is not right is the window is not full screen, should resize for the real screen size
         return (
                 self.center[0] - self.size[0] / 2 <= position[0] <= self.center[0] + self.size[0] / 2 and
                 -self.center[1] + 1080 - self.size[1] / 2 <= position[1] <= -self.center[1] + 1080 + self.size[1] / 2
