@@ -86,7 +86,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.cam.render = self
 
         self.text_input = -1
-        self.mouse_input = -1
+        self._mouse_input = 0
 
         self.mouse_pos = (0,0)
 
@@ -572,10 +572,18 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         if action != 0:
             self.text_input = key
 
+
     def on_mouse_press_event(self, x, y, button):
         # 1=left, 2=middle, 3=right (usually)
-        self.mouse_input = button
+        self._mouse_input = True
         self.mouse_pos = (x, y)
+
+    def on_mouse_release_event(self, x, y, button):
+        # 1=left, 2=middle, 3=right (usually)
+        self._mouse_input = False
+        self.mouse_pos = (x, y)
+    def get_mouse_input(self):
+        return self._mouse_input
 
 def run_renderer(root_object, Initialize, Exit):
     BereshitRenderer.Initialize = Initialize
