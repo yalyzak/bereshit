@@ -209,6 +209,10 @@ class World:
                     if child_of_child.get_component("Rigidbody") is not None:
                         child_of_child.position += child_of_child.Rigidbody.velocity * dt \
                                                    + 0.5 * child_of_child.Rigidbody.acceleration * dt * dt
+                    if not child_of_child.get_component("Rigidbody"):
+                        child_of_child.position = child.position + child_of_child.default_position
+                        child_of_child.quaternion = Quaternion.euler(child.rotation + child_of_child.default_rotation)
+
                 if not rb.isKinematic:
                     child.Rigidbody.integrat(dt)
 

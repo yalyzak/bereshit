@@ -168,9 +168,13 @@ class Object:
         self.position = Position(*position) if isinstance(position, tuple) else position or Position()
 
         self.__default_position = copy.copy(self.position)
+
         # self.__default_position = Vector3(0,0,0)
 
         self.rotation = Rotation(*rotation) if isinstance(rotation, tuple) else rotation or Rotation()
+
+        self.__default_rotation = copy.copy(self.rotation)
+
         self.world = None
 
         # self.quaternion = self._compute_quaternion()
@@ -358,8 +362,13 @@ class Object:
         x_cog, y_cog, z_cog = calculate_center_of_gravity_3d(positions, masses)
         print(f"Center of Gravity: ({x_cog:.2f}, {y_cog:.2f}, {z_cog:.2f})")
 
-    def getdefault_position(self):
+    @property
+    def default_position(self):
         return self.__default_position
+
+    @property
+    def default_rotation(self):
+        return self.__default_rotation
 
     def set_default_position(self):
         self.__default_position = copy.copy(self.position)
