@@ -86,7 +86,7 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         self.cam.render = self
 
         self.text_input = -1
-        self.mouse_input = -1
+        self._mouse_input = 0
 
         self.mouse_pos = (0,0)
 
@@ -277,37 +277,37 @@ class BereshitRenderer(moderngl_window.WindowConfig):
             uvs = uvs if uvs is not None and len(uvs) > 0 else []
 
             vertex_data = []
+            if obj.Mesh.triangles() is not None:
+                for tri in obj.Mesh.triangles():
+                    for index in tri:
 
-            for tri in obj.Mesh.triangles():
-                for index in tri:
+                        # position
+                        vertex_data += list(verts[index])
 
-                    # position
-                    vertex_data += list(verts[index])
+                        # # normal (temporary placeholder)
+                        # vertex_data += [0.0, 0.0, 1.0]
 
-                    # # normal (temporary placeholder)
-                    # vertex_data += [0.0, 0.0, 1.0]
+                        # uv
+                        if len(uvs) > 0:
+                            vertex_data += list(uvs[index])
+                        else:
+                            x, y, z = verts[index]
+                            vertex_data += [x * 0.5 + 0.5, y * 0.5 + 0.5]
 
-                    # uv
-                    if len(uvs) > 0:
-                        vertex_data += list(uvs[index])
-                    else:
-                        x, y, z = verts[index]
-                        vertex_data += [x * 0.5 + 0.5, y * 0.5 + 0.5]
+                vbo = np.array(vertex_data, dtype='f4')
+                vao_buffer = self.ctx.buffer(vbo.tobytes())
 
-            vbo = np.array(vertex_data, dtype='f4')
-            vao_buffer = self.ctx.buffer(vbo.tobytes())
+                vao = self.ctx.vertex_array(
+                    self.material_prog,
+                    [(vao_buffer, "3f 2f", "in_position", "in_texcoord")]
+                )
 
-            vao = self.ctx.vertex_array(
-                self.material_prog,
-                [(vao_buffer, "3f 2f", "in_position", "in_texcoord")]
-            )
-
-            self.meshes.append({
-                'obj': obj,
-                'vbo': vao_buffer,
-                'vao': vao,
-                'len': len(vertex_data) // 5,
-            })
+                self.meshes.append({
+                    'obj': obj,
+                    'vbo': vao_buffer,
+                    'vao': vao,
+                    'len': len(vertex_data) // 5,
+                })
 
     def render_mesh(self, item, shading, cam_pos):
         obj = item['obj']
@@ -572,10 +572,18 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         if action != 0:
             self.text_input = key
 
+
     def on_mouse_press_event(self, x, y, button):
         # 1=left, 2=middle, 3=right (usually)
-        self.mouse_input = button
+        self._mouse_input = True
         self.mouse_pos = (x, y)
+
+    def on_mouse_release_event(self, x, y, button):
+        # 1=left, 2=middle, 3=right (usually)
+        self._mouse_input = False
+        self.mouse_pos = (x, y)
+    def get_mouse_input(self):
+        return self._mouse_input
 
 def run_renderer(root_object, Initialize, Exit):
     BereshitRenderer.Initialize = Initialize
