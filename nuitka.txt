@@ -6,3 +6,6 @@ python -m nuitka main.py ^
   --include-package=moderngl_window.resources ^
   --include-data-dir=C:\Users\User\PycharmProjects\game\bereshit/shaders=bereshit/shaders ^
   --include-data-dir=C:\Users\User\PycharmProjects\game\CounterStrike-\models=CounterStrike/models
+
+
+
