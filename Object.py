@@ -126,32 +126,32 @@ class Object:
         #     self.World._remove_object(self)
         del self
 
-    def add_component(self, component, name=None):
-        # --- handle list input first ---
-        if isinstance(component, list):
-            for c in component:
-                self.add_component(c)  # just call normally
-            return self
+    def add_component(self, *components):
+        for component in components:
+            if isinstance(component, list) or isinstance(component, tuple):
+                for c in component:
+                    self.add_component(c)  # recursive flatten
+            else:
+                # --- single component ---
+                name = component.__class__.__name__
+                if hasattr(component, "attach"):
+                    result = component.attach(self)
+                    if result is not None:
+                        name = result
+                else:
+                    if hasattr(component, "attach"):
+                        component.attach(self)  # ignore result
 
-        # --- single component ---
-        if name is None:
-            name = component.__class__.__name__
-            if hasattr(component, "attach"):
-                result = component.attach(self)
-                if result is not None:
-                    name = result
-        else:
-            if hasattr(component, "attach"):
-                component.attach(self)  # ignore result
+                self.components[name] = component
+                component.parent = self  # optional back-reference
+                component.Active = True
 
-        self.components[name] = component
-        component.parent = self  # optional back-reference
-        component.Active = True
-
-        if hasattr(component, 'start') and component.start is not None:
-            component.start()
+                if hasattr(component, 'start') and component.start is not None:
+                    component.start()
 
         return self
+
+
 
     def __init__(self, position=None, rotation=None, size=None, children=None, components=None,
                  name=""):
