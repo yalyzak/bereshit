@@ -5,4 +5,4 @@ pyrr
 glfw
 open3d
 trimesh
-matplotlib
+
