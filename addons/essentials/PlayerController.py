@@ -5,7 +5,7 @@ import keyboard
 
 
 class PlayerController:
-    def __init__(self, speed=5, speed2=15, record_inputs=False, max_queue_size=1000):
+    def __init__(self, speed=5, speed2=100, record_inputs=False, max_queue_size=1000):
         self.force_amount = speed
         self.force_amount2 = speed2
 
@@ -49,6 +49,7 @@ class PlayerController:
     def keyboard_controller(self, dt):
         pressed_keys = []
 
+
         if keyboard.is_pressed('w'):
             pressed_keys.append('w')
             forward = self.parent.quaternion.rotate(Vector3(0, 0, 1))
@@ -73,7 +74,7 @@ class PlayerController:
             left = Vector3(left.x, 0, left.z).normalized() * self.force_amount
             self.parent.Rigidbody.velocity += left * dt
 
-        if keyboard.is_pressed('space'):
+        if keyboard.is_pressed('space') and (self.parent.Collider.stay or self.parent.Collider.enter):
             pressed_keys.append('space')
             self.parent.Rigidbody.velocity += Vector3(0, self.force_amount2, 0) * dt
 
