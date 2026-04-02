@@ -518,9 +518,8 @@ class BoxCollider:
         if result is None or result == []:
             return None
 
-        return result, rb
 
-        collision_axis, smallest_overlap, collision_type, collision_axis_indices = result
+        # collision_axis, smallest_overlap, collision_type, collision_axis_indices = result
 
 
 
@@ -541,7 +540,9 @@ class BoxCollider:
         else:
             other_collider.OnCollisionStay(self)
 
-        return contact_points, rb
+        # return contact_points, rb
+        return result, rb
+
 
     def attach(self, owner_object):
         if self.size == None:
