@@ -108,20 +108,21 @@ class World:
             first_obj = children[i]
             first_rb = first_obj.get_component("Rigidbody")
             first_collider = first_obj.get_component("Collider")
-
+            collided_a = False
             for j in range(i + 1, len(children)):
                 second_obj = children[j]
                 second_rb = second_obj.get_component("Rigidbody")
                 second_collider = second_obj.get_component("Collider")
+                collided_b = False
 
                 # Skip if neither has a Rigidbody or both are kinematic
                 if (first_rb is None or first_rb.isKinematic) and (second_rb is None or second_rb.isKinematic):
                     continue
 
-                result = first_collider.check_collision(second_collider, single_point=True)
+                result = first_collider.check_collision(second_collider, single_point=True, collided_a=collided_a, collided_b=collided_b)
                 if result is None:
                     continue
-
+                collided_a, collided_b = True, True
                 contact_points, rb = result  # contact_points = [(cp, n, pn), ...]
                 c1, c2 = rb
                 rb1, rb2 = c1.parent.Rigidbody, c2.parent.Rigidbody

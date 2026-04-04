@@ -492,7 +492,7 @@ class BoxCollider:
 
         return a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type, collision_axis_indices, collision_axis
 
-    def check_collision(self, other, single_point=False):
+    def check_collision(self, other, single_point=False, collided_a=True, collided_b=True):
 
         other_collider = getattr(other, 'collider', other)
         if other_collider is None:
@@ -500,10 +500,10 @@ class BoxCollider:
 
         result = self._SAT(other_collider)
         if result is None:
-            if self.stay or self.enter:
+            if (self.stay or self.enter) and not collided_a:
                 self.OnCollisionExit(other_collider)
-            if other_collider.stay or other_collider.enter:
-                other_collider.OnCollisionExit(other_collider) # could creat problems if two objects collide at once
+            if (other_collider.stay or other_collider.enter) and not collided_b:
+                other_collider.OnCollisionExit(other_collider)  # could creat problems if two objects collide at once
             return None
         a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type, collision_axis_indices, collision_axis = result
 
