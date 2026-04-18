@@ -231,8 +231,6 @@ class Rigidbody:
         self.force = Vector3(0, 0, 0)
         self.torque = Vector3(0, 0, 0)
 
-        self.angular_acceleration = Vector3(0, 0, 0)
-        self.torque = Vector3(0, 0, 0)
     def _get_friction(self, other_rb):
         """
         Returns the friction coefficient for the pair of materials.

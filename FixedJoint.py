@@ -72,7 +72,7 @@ class FixedJoint:
         world_anchor_B = self.body_b.position + rB
         error = world_anchor_B - world_anchor_A
 
-        beta = 0.0
+        beta = 0.2
         bias = error * (beta / dt)
 
         inv_mass = self.a.inv_mass + self.b.inv_mass
@@ -116,7 +116,7 @@ class FixedJoint:
 
         angular_error = error * 2.0
 
-        beta = 0.0
+        beta = 0.2
         bias = angular_error * (beta / dt)
 
         rel_w = self.b.angular_velocity - self.a.angular_velocity
