@@ -1,6 +1,7 @@
 import numpy as np
 
 from bereshit.Vector3 import Vector3
+from bereshit.class_type import Joint
 
 def skew(v: Vector3):
     """Returns the 3x3 skew-symmetric (cross-product) matrix of a Vector3."""
@@ -11,7 +12,7 @@ def skew(v: Vector3):
     [-y, x, 0]
     ])
 
-class HingeJoint:
+class HingeJoint(Joint):
     """
     Revolute (hinge) joint — connects two rigid bodies and allows
     rotation around a single axis only.

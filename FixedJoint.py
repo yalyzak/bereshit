@@ -1,5 +1,6 @@
 import numpy as np
 from bereshit.Vector3 import Vector3
+from bereshit.class_type import Joint
 
 
 def skew(v: Vector3):
@@ -11,7 +12,7 @@ def skew(v: Vector3):
     ])
 
 
-class FixedJoint:
+class FixedJoint(Joint):
     def __init__(self, body_b):
         self.body_b = body_b
 
@@ -88,13 +89,15 @@ class FixedJoint:
         J = Vector3.from_np(impulse)
 
         # Linear impulse
-        self.a.velocity -= J * self.a.inv_mass
+        if not self.a.isKinematic:
+            self.a.velocity -= J * self.a.inv_mass
         self.b.velocity += J * self.b.inv_mass
 
         # Angular impulse
-        self.a.angular_velocity += Vector3.from_np(
-            IA @ np.cross(rA.to_np(), impulse)
-        )
+        if not self.a.isKinematic:
+            self.a.angular_velocity += Vector3.from_np(
+                IA @ np.cross(rA.to_np(), impulse)
+            )
         self.b.angular_velocity -= Vector3.from_np(
             IB @ np.cross(rB.to_np(), impulse)
         )
@@ -124,7 +127,7 @@ class FixedJoint:
         K = IA + IB
 
         impulse = -np.linalg.solve(K, (rel_w + bias).to_np())
-
-        self.a.angular_velocity -= Vector3.from_np(IA @ impulse)
+        if not self.a.isKinematic:
+            self.a.angular_velocity -= Vector3.from_np(IA @ impulse)
         self.b.angular_velocity += Vector3.from_np(IB @ impulse)
 

@@ -9,9 +9,11 @@ from bereshit.Rigidbody import Rigidbody
 from bereshit.Vector3 import Vector3
 from bereshit.ContactPoint import ContactPoint
 from bereshit.ContactPoint import ContactManifold
+from bereshit.class_type import Joint, Collider
+
 
 class World:
-    def __init__(self, running_flag, children=None,gizmos=False,gravity=Vector3(0, -9.8, 0),tick=None,speed=None):
+    def __init__(self, running_flag, children=None, gizmos=False, gravity=Vector3(0, -9.8, 0), tick=None, speed=None):
         self.RunningFlag = running_flag
         self.children = children or []
         self.Camera = self.search_by_component('Camera')
@@ -23,8 +25,6 @@ class World:
         self.objects = self.get_all_children()
         for obj in self.objects:
             obj.World = self
-
-
 
     def add_object(self, object):
         self.children.append(object)
@@ -47,7 +47,6 @@ class World:
             if result:
                 return result
         return None
-
 
     def get_all_children(self):
         all_objs = []
@@ -78,9 +77,10 @@ class World:
         Go through all objects, find joints, and solve their constraints.
         """
         for child in children:
-            joint = child.get_component("joint")
-            if joint is not None:
+            joints = child.get_all_components(Joint)
+            for joint in joints:
                 joint.solve(dt)
+
     def solve_collectionsLastIteration(self, dt, contacts):
         for contact_points in contacts:
             for contact in contact_points:
@@ -89,6 +89,7 @@ class World:
                 rb1, rb2 = contact['rb1'], contact['rb2']
                 penetration = contact['penetration']
                 Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=False)
+
     def solve_collections(self, dt, contacts):
         for _ in range(20):  # basically unnecessary because v_ral is always >=0 after the first iteration but doesn't
             # hurt
@@ -99,6 +100,7 @@ class World:
                     rb1, rb2 = contact['rb1'], contact['rb2']
                     penetration = contact['penetration']
                     Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=False)
+
     def solve_collectionsFirstIteration(self, children, dt):
 
         contacts = []
@@ -119,7 +121,8 @@ class World:
                 if (first_rb is None or first_rb.isKinematic) and (second_rb is None or second_rb.isKinematic):
                     continue
 
-                result = first_collider.check_collision(second_collider, single_point=True, collided_a=collided_a, collided_b=collided_b)
+                result = first_collider.check_collision(second_collider, single_point=True, collided_a=collided_a,
+                                                        collided_b=collided_b)
                 if result is None:
                     continue
                 collided_a, collided_b = True, True
@@ -132,7 +135,8 @@ class World:
                         for (contact_point, normal, penetration) in contact_points:
                             contact_point = Vector3(contact_point)
 
-                            Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=False)
+                            Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt,
+                                                    apply_friction=False)
 
                             contacts2.append({
                                 "rb1": rb1,
@@ -187,7 +191,7 @@ class World:
                 for component in child.components.values():
                     if hasattr(component, 'Update') and component.Update is not None and component.Active == True:
                         try:
-                           component.Update(dt)
+                            component.Update(dt)
                         except Exception as e:
                             print(f"[Error] Exception in {component.__class__.__name__}.Update(): {e}")
                             traceback.print_exc()
@@ -197,8 +201,8 @@ class World:
         contacts = self.solve_collectionsFirstIteration(children, dt)  # handel collisions and friction
 
         for _ in range(10):  # keeps Constraint inline
-                self.solve_collections(dt, contacts)  # handel collisions and friction
-                self.solve_joints(children, dt)
+            self.solve_collections(dt, contacts)  # handel collisions and friction
+            self.solve_joints(children, dt)
 
         # self.solve_collectionsLastIteration(dt, contacts)
 

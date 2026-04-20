@@ -5,8 +5,10 @@ import numpy as np
 from bereshit.Vector3 import Vector3
 from bereshit.Quaternion import Quaternion
 from bereshit.Physics import RaycastHit
+from bereshit.class_type import Collider
 
-class BoxCollider:
+
+class BoxCollider(Collider):
     def __init__(self, size=None, rotation=None, object_pointer=None, is_trigger=False):
         self.size = size
         self.rotation = rotation
@@ -82,7 +84,8 @@ class BoxCollider:
         contact_points = list(hits)
         return contact_points, rb
 
-    def _find_contaact_points(self, a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type, collision_axis_indices, other):
+    def _find_contaact_points(self, a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type,
+                              collision_axis_indices, other):
 
         if collision_type == "a" or collision_type == "b":
             return self._FaceToFace(a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type,
@@ -90,6 +93,7 @@ class BoxCollider:
 
         else:
             [None, (other, self)]
+
     def get_bounds(self):
         # Get 8 corners in local space
         half = self.size * 0.5
@@ -122,7 +126,6 @@ class BoxCollider:
         bounds.append([min_bound, max_bound])
         return bounds
 
-
     def vertices(self):
         center, size, rotation = self.parent.position, self.size, self.obj.quaternion.conjugate()
         R = rotation.to_matrix3()
@@ -139,6 +142,7 @@ class BoxCollider:
         ])
         rotated = corners @ R.T
         return rotated + center.to_np()
+
     def triangles(self):
         vertices = self.vertices()
         # --- Define triangles using vertex indices ---
@@ -165,10 +169,10 @@ class BoxCollider:
         return triangles
 
     def edges(self):
-         return np.array([
-        [0, 1], [1, 2], [2, 3], [3, 0],
-        [4, 5], [5, 6], [6, 7], [7, 4],
-        [0, 4], [1, 5], [2, 6], [3, 7]
+        return np.array([
+            [0, 1], [1, 2], [2, 3], [3, 0],
+            [4, 5], [5, 6], [6, 7], [7, 4],
+            [0, 4], [1, 5], [2, 6], [3, 7]
         ])
 
     def faces(self):
@@ -198,7 +202,8 @@ class BoxCollider:
         # Build the faces as arrays of vertex positions
         faces = [np.array([v[i] for i in face]) for face in face_indices]
         return faces
-    def temp(self,center,half_size,R):
+
+    def temp(self, center, half_size, R):
         faces = []
         axes = [R[:, 0], R[:, 1], R[:, 2]]  # local x, y, z directions
         names = ["+X", "-X", "+Y", "-Y", "+Z", "-Z"]
@@ -222,7 +227,8 @@ class BoxCollider:
                     "rotation": face_R
                 })
         return faces
-    def Raycast(self, origin, direction, maxDistance=float('inf'),hit=None):
+
+    def Raycast(self, origin, direction, maxDistance=float('inf'), hit=None):
         def ray_box_intersect(orig, dir, box_min, box_max, eps=1e-8):
             inv_dir = 1.0 / (dir + eps * (dir == 0.0))
 
@@ -264,6 +270,7 @@ class BoxCollider:
             normal[hit_axis] = -1.0 if dir[hit_axis] > 0 else 1.0
 
             return hit_point, np.array(normal)
+
         def ray_obb_intersect(orig, dir, center, half_size, rotation_matrix):
             """
             Ray-OBB intersection.
@@ -287,23 +294,22 @@ class BoxCollider:
             normal_world = rotation_matrix @ normal_local
             normal_world /= np.linalg.norm(normal_world)
 
-            return RaycastHit(hit_world,normal_world,np.linalg.norm(hit_world - orig),self)
+            return RaycastHit(hit_world, normal_world, np.linalg.norm(hit_world - orig), self)
 
         center = self.parent.position.to_np()
-        half_size = (self.parent.size/2).to_np()
+        half_size = (self.parent.size / 2).to_np()
         R = self.parent.quaternion.conjugate().to_matrix3()
 
-        faces = self.temp(center,half_size,R)
-
+        faces = self.temp(center, half_size, R)
 
         dis = float('inf')
         hit = RaycastHit()
         for face in faces:
 
             temp_hit = ray_obb_intersect(origin, direction,
-                                    face["center"],
-                                    np.array([*face["half_size"], 0]),  # make it 3D if needed
-                                    face["rotation"])
+                                         face["center"],
+                                         np.array([*face["half_size"], 0]),  # make it 3D if needed
+                                         face["rotation"])
 
             if temp_hit is not None:
                 if temp_hit.distance < dis and temp_hit.distance < maxDistance:
@@ -313,94 +319,96 @@ class BoxCollider:
                     hit.collider = temp_hit.collider
 
         return hit
+
     # @staticmethod
-    def _FaceToFace(self, a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type, collision_axis_indices, other):
-            if collision_type == "a":
-                ref_axes, ref_center, ref_half = a_axes, a_center, a_half
-                inc_axes, inc_center, inc_half = b_axes, b_center, b_half
-                flip = False
-            else:
-                ref_axes, ref_center, ref_half = b_axes, b_center, b_half
-                inc_axes, inc_center, inc_half = a_axes, a_center, a_half
-                flip = True
+    def _FaceToFace(self, a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type, collision_axis_indices,
+                    other):
+        if collision_type == "a":
+            ref_axes, ref_center, ref_half = a_axes, a_center, a_half
+            inc_axes, inc_center, inc_half = b_axes, b_center, b_half
+            flip = False
+        else:
+            ref_axes, ref_center, ref_half = b_axes, b_center, b_half
+            inc_axes, inc_center, inc_half = a_axes, a_center, a_half
+            flip = True
 
-            def half_on_axis(h, i):
-                return h.x if i == 0 else h.y if i == 1 else h.z
+        def half_on_axis(h, i):
+            return h.x if i == 0 else h.y if i == 1 else h.z
 
-            face_index = collision_axis_indices
-            ref_normal = ref_axes[face_index]
-            if flip:
-                ref_normal = -ref_normal
+        face_index = collision_axis_indices
+        ref_normal = ref_axes[face_index]
+        if flip:
+            ref_normal = -ref_normal
 
-            # --- find incident face ---
-            incident_face = max(
-                range(3),
-                key=lambda i: abs(inc_axes[i].dot(ref_normal))
-            )
+        # --- find incident face ---
+        incident_face = max(
+            range(3),
+            key=lambda i: abs(inc_axes[i].dot(ref_normal))
+        )
 
-            # --- reference plane ---
-            plane_point = ref_center + ref_normal * half_on_axis(ref_half, face_index)
+        # --- reference plane ---
+        plane_point = ref_center + ref_normal * half_on_axis(ref_half, face_index)
 
-            # --- incident face vertices ---
-            def get_face_vertices(center, axes, half, i):
-                j = (i + 1) % 3
-                k = (i + 2) % 3
+        # --- incident face vertices ---
+        def get_face_vertices(center, axes, half, i):
+            j = (i + 1) % 3
+            k = (i + 2) % 3
 
-                sign = -1 if axes[i].dot(ref_normal) > 0 else 1
-                verts = []
+            sign = -1 if axes[i].dot(ref_normal) > 0 else 1
+            verts = []
 
-                for sj in (-1, 1):
-                    for sk in (-1, 1):
-                        verts.append(
-                            center
-                            + axes[i] * sign * half_on_axis(half, i)
-                            + axes[j] * sj * half_on_axis(half, j)
-                            + axes[k] * sk * half_on_axis(half, k)
-                        )
-                return verts
-
-            contacts = get_face_vertices(inc_center, inc_axes, inc_half, incident_face)
-
-            # --- clip ---
-            def clip_polygon(poly, n, p):
-                out = []
-                for i in range(len(poly)):
-                    A = poly[i]
-                    B = poly[(i + 1) % len(poly)]
-                    da = (A - p).dot(n)
-                    db = (B - p).dot(n)
-
-                    if da <= 0:
-                        out.append(A)
-                    if da * db < 0:
-                        t = da / (da - db)
-                        out.append(A + (B - A) * t)
-                return out
-
-            i = face_index
-            for axis_idx in ((i + 1) % 3, (i + 2) % 3):
-                axis = ref_axes[axis_idx]
-                limit = half_on_axis(ref_half, axis_idx)
-                for sign in (-1, 1):
-                    contacts = clip_polygon(
-                        contacts,
-                        axis * sign,
-                        ref_center + axis * sign * limit
+            for sj in (-1, 1):
+                for sk in (-1, 1):
+                    verts.append(
+                        center
+                        + axes[i] * sign * half_on_axis(half, i)
+                        + axes[j] * sj * half_on_axis(half, j)
+                        + axes[k] * sk * half_on_axis(half, k)
                     )
+            return verts
 
-            # --- final contacts ---
-            final_contacts = []
-            for p in contacts:
-                depth = (plane_point - p).dot(ref_normal)
-                if depth >= 0:
-                    final_contacts.append((p,-ref_normal,depth))
-                    V = p - a_center
-                    if V.dot(ref_normal) > 0:
-                        rb = (other, self)
-                    else:
-                        rb = (self, other)
+        contacts = get_face_vertices(inc_center, inc_axes, inc_half, incident_face)
 
-            return final_contacts, rb
+        # --- clip ---
+        def clip_polygon(poly, n, p):
+            out = []
+            for i in range(len(poly)):
+                A = poly[i]
+                B = poly[(i + 1) % len(poly)]
+                da = (A - p).dot(n)
+                db = (B - p).dot(n)
+
+                if da <= 0:
+                    out.append(A)
+                if da * db < 0:
+                    t = da / (da - db)
+                    out.append(A + (B - A) * t)
+            return out
+
+        i = face_index
+        for axis_idx in ((i + 1) % 3, (i + 2) % 3):
+            axis = ref_axes[axis_idx]
+            limit = half_on_axis(ref_half, axis_idx)
+            for sign in (-1, 1):
+                contacts = clip_polygon(
+                    contacts,
+                    axis * sign,
+                    ref_center + axis * sign * limit
+                )
+
+        # --- final contacts ---
+        final_contacts = []
+        for p in contacts:
+            depth = (plane_point - p).dot(ref_normal)
+            if depth >= 0:
+                final_contacts.append((p, -ref_normal, depth))
+                V = p - a_center
+                if V.dot(ref_normal) > 0:
+                    rb = (other, self)
+                else:
+                    rb = (self, other)
+
+        return final_contacts, rb
 
     @staticmethod
     def _get_axes(rotation: Quaternion):
@@ -489,7 +497,6 @@ class BoxCollider:
         if (b_center - a_center).dot(collision_axis) < 0:
             collision_axis = -collision_axis
 
-
         return a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type, collision_axis_indices, collision_axis
 
     def check_collision(self, other, single_point=False, collided_a=True, collided_b=True):
@@ -518,12 +525,7 @@ class BoxCollider:
         if result is None or result == []:
             return None
 
-
         # collision_axis, smallest_overlap, collision_type, collision_axis_indices = result
-
-
-
-
 
         if self.is_trigger:
             self.OnTriggerEnter(other_collider)
@@ -543,7 +545,6 @@ class BoxCollider:
         # return contact_points, rb
         return result, rb
 
-
     def attach(self, owner_object):
         if self.size == None:
             self.size = owner_object.size
@@ -552,4 +553,4 @@ class BoxCollider:
             self.rotation = owner_object.rotation
 
         self.obj = owner_object
-        return "Collider" # need to be change to "Collider" but fucks up the whole update loop
+        return "Collider"  # need to be change to "Collider" but fucks up the whole update loop

@@ -141,7 +141,11 @@ class Object:
                 else:
                     if hasattr(component, "attach"):
                         component.attach(self)  # ignore result
-
+                if self.components.get(name):
+                    i = 0
+                    while self.components.get(name):
+                        name = f"{name}_{i}"
+                        i += 1
                 self.components[name] = component
                 component.parent = self  # optional back-reference
                 component.Active = True
@@ -246,9 +250,9 @@ class Object:
         else:
             # name is a class
             for c in self.components.values():
-                if isinstance(c, type(name)):
-                    return c
-        return None
+                if isinstance(c, name):
+                    components.append(c)
+        return components
 
     def __getattr__(self, name):
         # Allow normal attribute access
