@@ -16,7 +16,6 @@ class FixedJoint(Joint):
     def __init__(self, body_b, anchor=None):
         self.body_b = body_b
 
-
     def attach(self, owner_object):
 
         self.body_a = owner_object
@@ -27,19 +26,15 @@ class FixedJoint(Joint):
         # Store initial relative transform
         self.local_offset = self.body_b.position - self.body_a.position
         self.initial_rel_rot = (
-            self.body_a.quaternion.inverse() *
-            self.body_b.quaternion
+                self.body_a.quaternion.inverse() *
+                self.body_b.quaternion
         )
         world_anchor = (self.body_a.position + self.body_b.position) * 0.5
 
         self.local_anchor_a = self.body_a.quaternion.inverse().rotate(world_anchor - self.body_a.position)
         self.local_anchor_b = self.body_b.quaternion.inverse().rotate(world_anchor - self.body_b.position)
 
-
-
-
         return "joint"
-
 
     def solve(self, dt):
         if not self.a.isKinematic:
@@ -51,57 +46,67 @@ class FixedJoint(Joint):
         self.solve_linear(dt)
         self.solve_angular(dt)
 
-
     # --------------------------------------------------
     # Proper 3D linear constraint with angular couplingd
     # --------------------------------------------------
-    def solve_linear(self, dt):
-        IA = self.a.Iinv_world()
-        IB = self.b.Iinv_world()
 
+    def solve_linear(self, dt):
+        a, b = self.a, self.b
+
+        IinvA = a.Iinv_world()  # already returns zeros for kinematic
+        IinvB = b.Iinv_world()
+
+        inv_mA = self.a.inv_mass
+        inv_mB = self.b.inv_mass
+
+        # World-space lever arms
         rA = self.body_a.quaternion.conjugate().rotate(self.local_anchor_a)
         rB = self.body_b.quaternion.conjugate().rotate(self.local_anchor_b)
 
-        # Velocity at anchors
-        vA = self.a.velocity + self.a.angular_velocity.cross(-rA)
-        vB = self.b.velocity + self.b.angular_velocity.cross(-rB)
+        # Velocities at the anchor points
+        vA = a.velocity + a.angular_velocity.cross(-rA)
+        vB = b.velocity + b.angular_velocity.cross(-rB)
+        dv = vB - vA
 
-        rv = vB - vA
-
-        # Position error
+        # Baumgarte position correction (bias)
         world_anchor_A = self.body_a.position + rA
         world_anchor_B = self.body_b.position + rB
-        error = world_anchor_B - world_anchor_A
+        pos_error = world_anchor_B - world_anchor_A
 
-        beta = 1
+        beta = 0.2
+        bias = pos_error * (beta / dt)
 
-        bias = error * (beta / dt)
-
-        inv_mass = self.a.inv_mass + self.b.inv_mass
+        # Effective mass matrix  K = (1/mA + 1/mB)*I + [rA]x * IinvA * [rA]x^T
+        #                                             + [rB]x * IinvB * [rB]x^T
+        inv_mass = inv_mA + inv_mB
+        rA_skew = skew(rA)
+        rB_skew = skew(rB)
 
         K = (
                 inv_mass * np.identity(3)
-                + skew(rA) @ IA @ skew(rA).T
-                + skew(rB) @ IB @ skew(rB).T
+                + rA_skew @ IinvA @ rA_skew.T
+                + rB_skew @ IinvB @ rB_skew.T
         )
 
-        impulse = -np.linalg.solve(K, (rv + bias).to_np())
+        # Solve  K * impulse = -(dv + bias)
+        impulse_np = -np.linalg.solve(K, (dv + bias).to_np())
+        impulse = Vector3.from_np(impulse_np)
 
-        J = Vector3.from_np(impulse)
+        # Apply linear impulse
+        if not a.isKinematic:
+            a.velocity -= impulse * inv_mA
+        if not b.isKinematic:
+            b.velocity += impulse * inv_mB
 
-        # Linear impulse
-        if not self.a.isKinematic:
-            self.a.velocity -= J * self.a.inv_mass
-        self.b.velocity += J * self.b.inv_mass
-
-        # Angular impulse
-        if not self.a.isKinematic:
-            self.a.angular_velocity += Vector3.from_np(
-                IA @ np.cross(rA.to_np(), impulse)
+        # Apply angular impulse from the lever arms
+        if not a.isKinematic:
+            a.angular_velocity += Vector3.from_np(
+                IinvA @ np.cross(rA.to_np(), impulse_np)
             )
-        self.b.angular_velocity -= Vector3.from_np(
-            IB @ np.cross(rB.to_np(), impulse)
-        )
+        if not b.isKinematic:
+            b.angular_velocity -= Vector3.from_np(
+                IinvB @ np.cross(rB.to_np(), impulse_np)
+            )
 
     def solve_angular(self, dt):
         IA = self.a.Iinv_world()
@@ -132,4 +137,3 @@ class FixedJoint(Joint):
         if not self.a.isKinematic:
             self.a.angular_velocity -= Vector3.from_np(IA @ impulse)
         self.b.angular_velocity += Vector3.from_np(IB @ impulse)
-
