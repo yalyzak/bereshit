@@ -240,7 +240,7 @@ class Object:
         else:
             # name is a class
             for c in self.components.values():
-                if isinstance(c, type(name)):
+                if isinstance(c, name):
                     return c
         return None
     def get_all_components(self, name):

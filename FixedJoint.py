@@ -13,7 +13,7 @@ def skew(v: Vector3):
 
 
 class FixedJoint(Joint):
-    def __init__(self, body_b):
+    def __init__(self, body_b, anchor=None):
         self.body_b = body_b
 
 
@@ -73,7 +73,8 @@ class FixedJoint(Joint):
         world_anchor_B = self.body_b.position + rB
         error = world_anchor_B - world_anchor_A
 
-        beta = 0.2
+        beta = 1
+
         bias = error * (beta / dt)
 
         inv_mass = self.a.inv_mass + self.b.inv_mass
@@ -119,7 +120,8 @@ class FixedJoint(Joint):
 
         angular_error = error * 2.0
 
-        beta = 0.2
+        beta = 1
+
         bias = angular_error * (beta / dt)
 
         rel_w = self.b.angular_velocity - self.a.angular_velocity

@@ -2,7 +2,7 @@ import numpy as np
 
 from bereshit.Vector3 import Vector3
 from bereshit.class_type import Joint
-
+from bereshit.Physics import Physics
 def skew(v: Vector3):
     """Returns the 3x3 skew-symmetric (cross-product) matrix of a Vector3."""
     x, y, z = v.x, v.y, v.z
@@ -60,8 +60,14 @@ class HingeJoint(Joint):
         # World-space anchor (default = midpoint)
         if self._anchor_override is not None:
             world_anchor = self._anchor_override
+
+
         else:
-            world_anchor = self.body_b.position
+            hit = Physics.Raycast(self.body_b.position.to_np(), -(self.body_b.position - self.body_a.position).to_np(), self.body_a.Collider).point
+            if hit is not None:
+                world_anchor = Vector3.from_np(hit)
+            else:
+                world_anchor = self.body_b.position  # fall back
 
         # Store anchor in each body's local frame
         self.local_anchor_a = self.body_a.quaternion.inverse().rotate(

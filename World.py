@@ -1,7 +1,7 @@
 import random
 import traceback
 import time
-
+import logging
 import numpy as np
 
 from bereshit.Quaternion import Quaternion
@@ -11,7 +11,7 @@ from bereshit.ContactPoint import ContactPoint
 from bereshit.ContactPoint import ContactManifold
 from bereshit.class_type import Joint, Collider
 
-
+logger = logging.getLogger(__name__)
 class World:
     def __init__(self, running_flag, children=None, gizmos=False, gravity=Vector3(0, -9.8, 0), tick=None, speed=None):
         self.RunningFlag = running_flag
@@ -59,8 +59,12 @@ class World:
     def get_all_children_physics(self):
         all_objs = []
         for child in self.children:
-            rb = child.get_component("Rigidbody")
-            collider = child.get_component("Collider")
+            rb = child.get_component(Rigidbody)
+            collider = child.get_component(Collider)
+            if rb and not collider:
+                logger.warning(f"object {child.name} has a Rigidbody but no Collider")
+            if collider and not rb:
+                logger.warning(f"object {child.name} has a Rigidbody but no Collider")
             if rb and collider:
                 all_objs.append(child)
             all_objs.extend(child.get_all_children_physics())
