@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 from bereshit.Vector3 import Vector3
@@ -27,7 +29,7 @@ class HingeJoint(Joint):
     """
 
     def __init__(self, body_b, axis: Vector3, friction_coefficient=0.0,
-                 anchor=None):
+                 anchor=None, max_rotation=90, min_rotation=-90):
         """
         Parameters
         ----------
@@ -46,7 +48,8 @@ class HingeJoint(Joint):
         self.axis_local = axis.normalized()          # hinge axis in A's local frame
         self.friction_coefficient = friction_coefficient
         self._anchor_override = anchor               # optional explicit anchor
-
+        self.max_rotation = max_rotation
+        self.min_rotation = min_rotation
     # ------------------------------------------------------------------ #
     #  Lifecycle
     # ------------------------------------------------------------------ #
@@ -195,6 +198,9 @@ class HingeJoint(Joint):
 
         # Baumgarte angular correction
         q_rel = self.body_a.quaternion.inverse() * self.body_b.quaternion
+
+        self.clamp_rotation(q_rel, IinvA, IinvB, a, b)
+
         q_error = q_rel * self.initial_rel_rot.inverse()
 
         # The vector part of the error quaternion gives the rotation error
@@ -246,6 +252,28 @@ class HingeJoint(Joint):
             if not b.isKinematic:
                 b.angular_velocity += Vector3.from_np(IinvB @ f_imp)
 
+    def clamp_rotation(self, q_rel, IinvA, IinvB, a, b):
+        axis_world = self.body_a.quaternion.rotate(self.axis_local).normalized()
+
+        # extract angle from quaternion
+        angle = 2 * math.atan2(
+            Vector3(q_rel.x, q_rel.y, q_rel.z).dot(axis_world),
+            q_rel.w
+        )
+
+        angle = math.degrees(angle)
+        angle = (angle + 180) % 360 - 180
+        clamped_angle = max(self.min_rotation, min(angle, self.max_rotation))
+        error = angle - clamped_angle
+        if abs(error) > 0.001:
+            correction_speed = error * 0.01  # stiffness (tune this)
+
+            impulse = axis_world * (-correction_speed)
+
+            if not a.isKinematic:
+                a.angular_velocity -= Vector3.from_np(IinvA @ impulse.to_np())
+            if not b.isKinematic:
+                b.angular_velocity += Vector3.from_np(IinvB @ impulse.to_np())
     # ------------------------------------------------------------------ #
     #  Helper — find a vector perpendicular to the given axis
     # ------------------------------------------------------------------ #
