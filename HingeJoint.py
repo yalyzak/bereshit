@@ -177,7 +177,7 @@ class HingeJoint(Joint):
         IinvB = b.Iinv_world()
 
         # Hinge axis in world space (attached to body A)
-        axis_world = self.body_a.quaternion.rotate(self.axis_local).normalized()
+        axis_world = self.body_a.quaternion.conjugate().rotate(self.axis_local).normalized()
 
         # Build two axes perpendicular to the hinge axis
         t1 = self._perp(axis_world)
@@ -199,7 +199,7 @@ class HingeJoint(Joint):
         # Baumgarte angular correction
         q_rel = self.body_a.quaternion.inverse() * self.body_b.quaternion
 
-        self.clamp_rotation(q_rel, IinvA, IinvB, a, b)
+        # self.clamp_rotation(q_rel, IinvA, IinvB, a, b)
 
         q_error = q_rel * self.initial_rel_rot.inverse()
 
