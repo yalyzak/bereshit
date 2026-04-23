@@ -13,7 +13,7 @@ from bereshit.class_type import Joint, Collider
 
 logger = logging.getLogger(__name__)
 class World:
-    def __init__(self, running_flag, children=None, gizmos=False, gravity=Vector3(0, -9.8, 0), tick=None, speed=None):
+    def __init__(self, running_flag, children=None, gizmos=False, gravity=Vector3(0, -9.8, 0), tick=None, speed=None, physics_epochs=1):
         self.RunningFlag = running_flag
         self.children = children or []
         self.Camera = self.search_by_component('Camera')
@@ -26,6 +26,7 @@ class World:
         for obj in self.objects:
             obj.World = self
 
+        self.physics_epochs = physics_epochs
     def add_object(self, object):
         self.children.append(object)
 
@@ -203,8 +204,9 @@ class World:
         children = self.get_all_children_physics()
         self.apply_gravity(children)  # APPLY GRAVITY and external forces
         contacts = self.solve_collectionsFirstIteration(children, dt)  # handel collisions and friction
+        self.solve_joints(children, dt)
 
-        for _ in range(10):  # keeps Constraint inline
+        for _ in range(self.physics_epochs - 1):  # keeps Constraint inline
             self.solve_collections(dt, contacts)  # handel collisions and friction
             self.solve_joints(children, dt)
 

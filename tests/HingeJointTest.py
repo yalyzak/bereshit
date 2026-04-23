@@ -6,43 +6,15 @@ from bereshit.addons.essentials import FPS_cam, CamController
 
 
 class HingeJointTest:
-    def __init__(self, hinge, arm):
+    def __init__(self, hinge):
         self.hinge = hinge
-        self.arm = arm
-
+    # def Start(self):
+    #     self.hinge.body_a.Rigidbody.angular_velocity += Vector3(16,0,0)
     def Update(self, dt):
-        # world anchor
-        a = self.hinge.body_a.position + self.hinge.body_a.quaternion.rotate(self.hinge.local_anchor_a)
-        b = self.hinge.body_b.position + self.hinge.body_b.quaternion.rotate(self.hinge.local_anchor_b)
-
-        # # 🔥 1. anchor consistency
-        error = (a - b).magnitude()
-        # print("Anchor error:", error)
-
-        # 🔥 2. distance from anchor → arm center
-        arm_pos = self.arm.position
-        dist = (arm_pos - a).magnitude()
-        # print("Arm distance from hinge:", dist)
-
-        # 🔥 3. check axis alignment (should rotate around Z)
-        axis_world = self.hinge.body_a.quaternion.conjugate().rotate(self.hinge.axis_local).normalized()
-        rel = (arm_pos - a).normalized()
-
-        # dot should stay ~constant if rotating in plane
-        dot = rel.dot(axis_world)
-        print("Axis dot (should ~0):", dot)
-
-        # relative angular velocity
-        wA = self.hinge.body_a.Rigidbody.angular_velocity
-        wB = self.hinge.body_b.Rigidbody.angular_velocity
-
-        rel_w = wB - wA
-
-        axis = axis_world
-        twist = axis * rel_w.dot(axis)  # allowed
-        swing = rel_w - twist  # should be ZERO
-
-        # print("Angular constraint error:", swing.magnitude())
+        # print(self.parent.name)
+        print("angular_velocity :", self.hinge.body_a.Rigidbody.angular_velocity)
+        # print("quaternion :", self.hinge.body_a.quaternion)
+        # print("axis_world :", self.hinge.axis_world)
 
 
 class ServoController:
@@ -50,7 +22,7 @@ class ServoController:
         self.target_angle = 0.0
 
         self.kP = 0.5  # converts angle error → desired speed
-        self.kD = 5  # constant speed
+        self.kD = 1  # constant speed
         self.max_speed = 6.54  # rad/s
         self.max_torque = 10.32  # strength of motor
         self._axis = axis
@@ -58,6 +30,8 @@ class ServoController:
         self.min_rotation = -180
         self.target_angle = 0.0
         self.time = 1
+        self.time2 = 0
+        self.did = False
         self.direction = -1
 
     def Update(self, dt):
@@ -73,17 +47,17 @@ class ServoController:
 
         # Extract angle around axis from quaternion (NOT Euler angles - they have singularities at 90°)
         q = self.parent.quaternion
-        
+
         # Ensure we're on the short path
         # if q.w < 0:
         #     q = q.
-        
+
         q_vec = Vector3(q.x, q.y, q.z)
         current_angle = math.degrees(2.0 * math.atan2(q_vec.dot(self._axis), q.w))
-        
+
         # Normalize to [-180, 180]
         current_angle = (current_angle + 180) % 360 - 180
-        
+
         error = self.target_angle - current_angle
 
         # normalize angle error to [-180, 180]
@@ -116,46 +90,49 @@ class ServoController:
 
 class ServoControllerTest(ServoController):
     def Update(self, dt):
-        if abs(self.target_angle) > 50 and self.time > 1:
-            self.direction *= -1
-            self.time = 0
-        self.time += dt
-        self.target_angle += 50.0 * dt * self.direction
+        self._axis = self.parent.get_component(HingeJoint).axis_world.normalized()
+        # print(self._axis)
+        if self.time2 > 2:
+            # if not self.did:
+            #     self.parent.get_component(HingeJoint).attach(self.parent)
+            #     self.did = True
+            if abs(self.target_angle) > 100 and self.time > 1:
+                self.direction *= -1
+                self.time = 0
+            self.time += dt
+            self.target_angle += 50.0 * dt * self.direction
 
-        self.target_angle = max(min(self.target_angle, self.max_rotation), self.min_rotation)
-        self.fix(dt)
+            self.target_angle = max(min(self.target_angle, self.max_rotation), self.min_rotation)
+            self.fix(dt)
+        self.time2 += dt
 
-
-
-class add:
-    def __init__(self):
-        self.time =0
-
-    def Update(self, dt):
-        self.time += dt
-        if self.time > 0.5:
-            print()
-        if self.time > 1:
-            self.parent.Rigidbody.angular_velocity += Vector3(0,0,1)
-            self.Active = False
 
 
 cam = Object(position=Vector3(0, 0, -8)).add_component(Camera(), CamController())
 
-axis = Vector3(0,0,1)
+axis1 = Vector3(0, 0, 1)
 
-mount = Object(name="mount", size=Vector3(0, 0, 0), position=Vector3(0, 0, 0)).add_component(
+mount = Object(name="mount", size=Vector3(1, 1, 1), position=Vector3(0, -2, 0)).add_component(
     Rigidbody(isKinematic=True), BoxCollider())
 
 servo = Object(name="servo", ).add_component(BoxCollider(), Rigidbody(angular_velocity=Vector3(0, 0, 0)),
-                                             HingeJoint(mount, axis, anchor=Vector3(0, 0, 0)), ServoControllerTest(axis))
+                                             HingeJoint(mount, axis1, anchor=Vector3(0, -2, 0)), ServoControllerTest(axis1))
 
-arm = Object(name="arm", position=Vector3(0, 2, 0), size=Vector3(1, 2, 1)).add_component(BoxCollider(),
-                                                                                         Rigidbody(mass=0.03),
-                                                                                         FixedJoint(servo))
+mount.quaternion *= Quaternion.euler(Vector3(20, 0, 0))
 
-mount.quaternion *= Quaternion.euler(Vector3(30, 0, 0))
+test = Object(name ="test1", size=Vector3(0, 0, 0)).add_component(HingeJointTest(servo.get_component(HingeJoint)))
 
-test = Object(size=Vector3(0, 0, 0)).add_component(HingeJointTest(servo.get_component(HingeJoint), arm))
 
-Core.run([cam, mount, servo, arm, test], gravity=Vector3())
+axis2 = Vector3(0, 1, 0)
+
+mount2 = Object(name="mount2", size=Vector3(1, 1, 1), position=Vector3(5, -2, 0)).add_component(
+    Rigidbody(isKinematic=True), BoxCollider())
+
+servo2 = Object(name="servo2", position=Vector3(5,-2,-2)).add_component(BoxCollider(), Rigidbody(angular_velocity=Vector3(0, 0, 0)),
+                                             HingeJoint(mount2, axis2, anchor=Vector3(5, -2, 0)), ServoControllerTest(axis2))
+
+
+test2 = Object(name="test2", size=Vector3(0, 0, 0)).add_component(HingeJointTest(servo2.get_component(HingeJoint)))
+
+
+Core.run([cam, mount, servo, mount2, servo2, test], gravity=Vector3(), physics_epochs=2)

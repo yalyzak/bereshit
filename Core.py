@@ -9,7 +9,7 @@ from bereshit import Object, render, World,Vector3
 # import old_render as render
 
 
-def run(scene,speed=1, gizmos=False, scriptRefreshRate=60,tick=1/60, Render=True, ForceRenderInitialize=True, gravity=Vector3(0,-9.8,0)):
+def run(scene,speed=1, gizmos=False, scriptRefreshRate=60,tick=1/60, Render=True, ForceRenderInitialize=True, gravity=Vector3(0,-9.8,0), physics_epochs=10):
     Exit = [False]
 
     if not Render:
@@ -23,10 +23,10 @@ def run(scene,speed=1, gizmos=False, scriptRefreshRate=60,tick=1/60, Render=True
     if gizmos:
         hit_points = [Object(size=(0.1,0.1,0.1),position=(100,100,100),children=[Object(size=(0.1,0.1,0.1),position=(100,100,100)) for i in range(8)]) for i in range(8)]
         gizmos_container = Object(size=(0,0,0),children=hit_points)
-        world = World(Exit, children=scene+[gizmos_container],gizmos=gizmos_container,gravity=gravity,tick=tick,speed=speed)
+        world = World(Exit, children=scene+[gizmos_container],gizmos=gizmos_container,gravity=gravity,tick=tick,speed=speed, physics_epochs=physics_epochs)
 
     else:
-        world = World(Exit, children=scene,gravity=gravity,tick=tick,speed=speed)
+        world = World(Exit, children=scene,gravity=gravity,tick=tick,speed=speed, physics_epochs=physics_epochs)
 
     async def main_logic(Initialize):
         start_wall_time = time.perf_counter()

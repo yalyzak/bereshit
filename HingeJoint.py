@@ -29,7 +29,7 @@ class HingeJoint(Joint):
     """
 
     def __init__(self, body_b, axis: Vector3, friction_coefficient=0.0,
-                 anchor=None, max_rotation=90, min_rotation=-90):
+                 anchor=None, max_rotation=180, min_rotation=-180):
         """
         Parameters
         ----------
@@ -50,6 +50,9 @@ class HingeJoint(Joint):
         self._anchor_override = anchor               # optional explicit anchor
         self.max_rotation = max_rotation
         self.min_rotation = min_rotation
+        self.world_anchor = Vector3()
+        self.axis_world = Vector3()
+        self.d = 0
     # ------------------------------------------------------------------ #
     #  Lifecycle
     # ------------------------------------------------------------------ #
@@ -62,22 +65,22 @@ class HingeJoint(Joint):
 
         # World-space anchor (default = midpoint)
         if self._anchor_override is not None:
-            world_anchor = self._anchor_override
+            self.world_anchor = self._anchor_override
 
 
         else:
             hit = Physics.Raycast(self.body_b.position.to_np(), -(self.body_b.position - self.body_a.position).to_np(), self.body_a.Collider).point
             if hit is not None:
-                world_anchor = Vector3.from_np(hit)
+                self.world_anchor = Vector3.from_np(hit)
             else:
-                world_anchor = self.body_b.position  # fall back
+                self.world_anchor = self.body_b.position  # fall back
 
         # Store anchor in each body's local frame
         self.local_anchor_a = self.body_a.quaternion.inverse().rotate(
-            world_anchor - self.body_a.position
+            self.world_anchor - self.body_a.position
         )
         self.local_anchor_b = self.body_b.quaternion.inverse().rotate(
-            world_anchor - self.body_b.position
+            self.world_anchor - self.body_b.position
         )
 
         # Store the initial relative rotation so we can measure drift
@@ -99,8 +102,12 @@ class HingeJoint(Joint):
             self.b.velocity += (self.b.force / self.b.mass) * dt
             self.b.force = Vector3()
 
+        self.axis_world = self.body_a.quaternion.conjugate().rotate(self.axis_local).normalized()
+
         self.solve_linear(dt)
         self.solve_angular(dt)
+        self.d = 1
+
 
     # ------------------------------------------------------------------ #
     #  1) Linear constraint — keep the anchors together
@@ -177,7 +184,7 @@ class HingeJoint(Joint):
         IinvB = b.Iinv_world()
 
         # Hinge axis in world space (attached to body A)
-        axis_world = self.body_a.quaternion.conjugate().rotate(self.axis_local).normalized()
+        axis_world = self.body_b.quaternion.conjugate().rotate(self.axis_local).normalized()
 
         # Build two axes perpendicular to the hinge axis
         t1 = self._perp(axis_world)
@@ -199,7 +206,7 @@ class HingeJoint(Joint):
         # Baumgarte angular correction
         q_rel = self.body_a.quaternion.inverse() * self.body_b.quaternion
 
-        # self.clamp_rotation(q_rel, IinvA, IinvB, a, b)
+        self.clamp_rotation(q_rel, IinvA, IinvB, a, b)
 
         q_error = q_rel * self.initial_rel_rot.inverse()
 
@@ -228,6 +235,32 @@ class HingeJoint(Joint):
         # ---------------------------------------------------------------
         #  3) Hinge-axis friction (optional)
         # ---------------------------------------------------------------
+        # self.friction()
+
+    def clamp_rotation(self, q_rel, IinvA, IinvB, a, b):
+        axis_world = self.body_a.quaternion.rotate(self.axis_local).normalized() # should be body b i think
+
+        # extract angle from quaternion
+        angle = 2 * math.atan2(
+            Vector3(q_rel.x, q_rel.y, q_rel.z).dot(axis_world),
+            q_rel.w
+        )
+
+        angle = math.degrees(angle)
+        angle = (angle + 180) % 360 - 180
+        clamped_angle = max(self.min_rotation, min(angle, self.max_rotation))
+        error = angle - clamped_angle
+        if abs(error) > 0.001:
+            correction_speed = error * 0.01  # stiffness (tune this)
+
+            impulse = axis_world * (-correction_speed)
+
+            if not a.isKinematic:
+                a.angular_velocity -= Vector3.from_np(IinvA @ impulse.to_np())
+            if not b.isKinematic:
+                b.angular_velocity += Vector3.from_np(IinvB @ impulse.to_np())
+
+    def friction(self, rel_w, axis_world, K_full, ang_impulse_2d, IinvA, IinvB, a, b):
         if self.friction_coefficient > 0:
             # Relative angular velocity around the hinge axis
             w_hinge = rel_w.dot(axis_world)
@@ -252,28 +285,6 @@ class HingeJoint(Joint):
             if not b.isKinematic:
                 b.angular_velocity += Vector3.from_np(IinvB @ f_imp)
 
-    def clamp_rotation(self, q_rel, IinvA, IinvB, a, b):
-        axis_world = self.body_a.quaternion.rotate(self.axis_local).normalized()
-
-        # extract angle from quaternion
-        angle = 2 * math.atan2(
-            Vector3(q_rel.x, q_rel.y, q_rel.z).dot(axis_world),
-            q_rel.w
-        )
-
-        angle = math.degrees(angle)
-        angle = (angle + 180) % 360 - 180
-        clamped_angle = max(self.min_rotation, min(angle, self.max_rotation))
-        error = angle - clamped_angle
-        if abs(error) > 0.001:
-            correction_speed = error * 0.01  # stiffness (tune this)
-
-            impulse = axis_world * (-correction_speed)
-
-            if not a.isKinematic:
-                a.angular_velocity -= Vector3.from_np(IinvA @ impulse.to_np())
-            if not b.isKinematic:
-                b.angular_velocity += Vector3.from_np(IinvB @ impulse.to_np())
     # ------------------------------------------------------------------ #
     #  Helper — find a vector perpendicular to the given axis
     # ------------------------------------------------------------------ #
