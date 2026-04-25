@@ -157,7 +157,7 @@ class Object:
 
 
 
-    def __init__(self, position=None, rotation=None, size=None, children=None, components=None,
+    def __init__(self, position=None, rotation=None, size=None, quaternion=None, children=None, components=None,
                  name=""):
         self.parent = None
         self.children = children or []
@@ -183,7 +183,7 @@ class Object:
 
         # self.quaternion = self._compute_quaternion()
 
-        self.quaternion = Quaternion.euler(self.rotation)
+        self.quaternion = Quaternion.euler(self.rotation) if not quaternion else quaternion
         self._rotation_dirty = False
         self.add_component(Material())
         self.add_component(MeshRander(shape="box"))

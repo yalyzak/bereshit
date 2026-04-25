@@ -2,6 +2,7 @@ import math
 import copy
 import trimesh
 import moderngl
+from PIL import Image
 
 from bereshit.Vector3 import Vector3
 
@@ -34,6 +35,10 @@ class MeshRander:
         return self._TextureImage
 
     def attach(self, owner_object):
+        mesh = owner_object.get_component("Mesh")  # will remove duplicate renders by default
+        if mesh:
+            owner_object.remove_component("Mesh")
+
         self.parent = owner_object
         if self._obj_path:
             self._vertices, self._triangles, self._edges, self._colors = self.load_model()
@@ -47,6 +52,8 @@ class MeshRander:
                     self._triangles = None  # No triangle data available
                 elif len(result) == 3:  # Vertices, edges, triangles
                     self._vertices, self._edges, self._triangles = result
+                elif len(result) == 4:  # Vertices, edges, triangles
+                    self._vertices, self._edges, self._triangles, self._faces = result
                 else:
                     raise ValueError("Shape generator must return (vertices, edges) or (vertices, edges, triangles)")
             else:
@@ -59,12 +66,19 @@ class MeshRander:
 
         else:
             raise ValueError("Must provide either a shape, .obj path, or both vertices and edges")
+        if self._repeat_texture:
+            if self._shape == "box":
+                self.build_uv_cube()
         return "Mesh"
 
-    def __init__(self, vertices=None, edges=None, shape=None, triangles=None, obj_path=None, size=None):
+    def __init__(self, vertices=None, edges=None, shape=None, triangles=None, faces=None, obj_path=None, size=None, texture=None, repeat_texture=False):
         self._shape = shape
         self.colors = None
-        self._TextureImage = None
+        if texture:
+            self._TextureImage = Image.open(texture)
+        else:
+            self._TextureImage = None
+        self._repeat_texture = repeat_texture
         self._uv = []
         if size:
             self._size = size.to_np()
@@ -74,8 +88,8 @@ class MeshRander:
         self._vertices = vertices
         self._edges = edges
         self._triangles = triangles
+        self._faces = faces
         self._obj_path = obj_path
-
 
     def get_generator_function(self, shape_name):
         generators = {
@@ -141,6 +155,41 @@ class MeshRander:
 
         return vertices, triangles, edges, colors
 
+    def build_uv_cube(self):
+        old_vertices = self._vertices[:]  # original 8 vertices
+
+        self._vertices = []
+        self._uv = []
+        self._triangles = []
+
+        # full texture per face
+        uv_face = [
+            (0.0, 0.0),  # bottom-left
+            (1.0, 0.0),  # bottom-right
+            (1.0, 1.0),  # top-right
+            (0.0, 1.0),  # top-left
+        ]
+
+        for face in self._faces:
+            i0, i1, i2, i3 = face
+
+            # duplicate vertices for this face
+            v0 = old_vertices[i0]
+            v1 = old_vertices[i1]
+            v2 = old_vertices[i2]
+            v3 = old_vertices[i3]
+
+            start = len(self._vertices)
+
+            self._vertices += [v0, v1, v2, v3]
+            self._uv += uv_face
+
+            # build 2 triangles
+            self._triangles += [
+                (start + 0, start + 1, start + 2),
+                (start + 0, start + 2, start + 3),
+            ]
+
     @staticmethod
     def generate_cube():
         cube_vertices = [
@@ -149,11 +198,14 @@ class MeshRander:
             Vector3(-1, -1, 1), Vector3(1, -1, 1),
             Vector3(1, 1, 1), Vector3(-1, 1, 1),
         ]
+
         cube_edges = [
             (0, 1), (1, 2), (2, 3), (3, 0),
             (4, 5), (5, 6), (6, 7), (7, 4),
             (0, 4), (1, 5), (2, 6), (3, 7)
         ]
+
+        # triangles (for rendering)
         cube_triangles = [
             # back (-Z)
             (0, 1, 2), (0, 2, 3),
@@ -168,9 +220,18 @@ class MeshRander:
             # top (+Y)
             (3, 2, 6), (3, 6, 7),
         ]
-        # centroid = sum(cube_vertices, Vector3()) * (1.0 / len(cube_vertices))
-        # cube_vertices = [v - centroid for v in cube_vertices]
-        return cube_vertices, cube_edges, cube_triangles
+
+        # NEW: faces (quads, perfect for UV mapping)
+        cube_faces = [
+            (0, 1, 2, 3),  # back
+            (4, 5, 6, 7),  # front
+            (0, 3, 7, 4),  # left
+            (1, 5, 6, 2),  # right
+            (0, 4, 5, 1),  # bottom
+            (3, 2, 6, 7),  # top
+        ]
+
+        return cube_vertices, cube_edges, cube_triangles, cube_faces
 
     @staticmethod
     def generate_ellipsoid(rx=1, ry=1, rz=1, segments=12, rings=6):

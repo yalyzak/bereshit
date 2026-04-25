@@ -6,6 +6,7 @@ from bereshit.Vector3 import Vector3
 from bereshit.Quaternion import Quaternion
 from bereshit.Physics import RaycastHit
 from bereshit.class_type import Collider
+from bereshit.Collision import Collision
 
 
 class BoxCollider(Collider):
@@ -18,33 +19,33 @@ class BoxCollider(Collider):
         self.enter = False
         self.stay = False
 
-    def OnCollisionEnter(self, other_collider):
+    def OnCollisionEnter(self, collision):
         self.enter = True
 
         for component in self.parent.components.values():
             if hasattr(component, 'OnCollisionEnter') and component.OnCollisionEnter is not None and component != self:
-                component.OnCollisionEnter(other_collider)
+                component.OnCollisionEnter(collision)
 
-    def OnCollisionStay(self, other_collider):
+    def OnCollisionStay(self, collision):
         self.enter = False
         self.stay = True
         for component in self.parent.components.values():
             if hasattr(component, 'OnCollisionStay') and component.OnCollisionStay is not None and component != self:
-                component.OnCollisionStay(other_collider)
+                component.OnCollisionStay(collision)
 
-    def OnCollisionExit(self, other_collider):
+    def OnCollisionExit(self, collision):
         self.enter = False
         self.stay = False
 
         for component in self.parent.components.values():
             if hasattr(component, 'OnCollisionExit') and component.OnCollisionExit is not None and component != self:
-                component.OnCollisionExit(other_collider)
+                component.OnCollisionExit(collision)
 
-    def OnTriggerEnter(self, other_collider):
+    def OnTriggerEnter(self, collision):
         """This method can be overwritten by subclasses to handle trigger events."""
         for component in self.parent.components.values():
             if hasattr(component, 'OnTriggerEnter') and component.OnTriggerEnter is not None and component != self:
-                component.OnTriggerEnter(other_collider)
+                component.OnTriggerEnter(collision)
 
     def _find_contaact_points_raycast(self, other_collider, collision_axis):
         hits = set()
@@ -504,13 +505,14 @@ class BoxCollider(Collider):
         other_collider = getattr(other, 'collider', other)
         if other_collider is None:
             return None
+        collision = Collision(other, None)
 
         result = self._SAT(other_collider)
         if result is None:
             if (self.stay or self.enter) and not collided_a:
-                self.OnCollisionExit(other_collider)
+                self.OnCollisionExit(collision)
             if (other_collider.stay or other_collider.enter) and not collided_b:
-                other_collider.OnCollisionExit(other_collider)  # could creat problems if two objects collide at once
+                other_collider.OnCollisionExit(collision)  # could creat problems if two objects collide at once
             return None
         a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type, collision_axis_indices, collision_axis = result
 
@@ -519,6 +521,7 @@ class BoxCollider(Collider):
         #     return None
         # result, rb = result
         result, rb = self._find_contaact_points_raycast(other_collider, collision_axis)
+        collision = Collision(other, -collision_axis)
 
         if single_point:
             result = self._average_contact_data(result)
@@ -528,19 +531,19 @@ class BoxCollider(Collider):
         # collision_axis, smallest_overlap, collision_type, collision_axis_indices = result
 
         if self.is_trigger:
-            self.OnTriggerEnter(other_collider)
+            self.OnTriggerEnter(collision)
         if other_collider.is_trigger:
-            other_collider.OnTriggerEnter(self)
+            other_collider.OnTriggerEnter(collision)
 
         if self.enter == False:
-            self.OnCollisionEnter(other_collider)
+            self.OnCollisionEnter(collision)
         else:
-            self.OnCollisionStay(other_collider)
+            self.OnCollisionStay(collision)
 
         if other_collider.enter == False:
-            other_collider.OnCollisionEnter(self)
+            other_collider.OnCollisionEnter(collision)
         else:
-            other_collider.OnCollisionStay(self)
+            other_collider.OnCollisionStay(collision)
 
         # return contact_points, rb
         return result, rb
