@@ -53,6 +53,7 @@ class HingeJoint(Joint):
         self.world_anchor = Vector3()
         self.axis_world = Vector3()
         self.d = 0
+        self.beta = 0.2
     # ------------------------------------------------------------------ #
     #  Lifecycle
     # ------------------------------------------------------------------ #
@@ -102,11 +103,11 @@ class HingeJoint(Joint):
             self.b.velocity += (self.b.force / self.b.mass) * dt
             self.b.force = Vector3()
 
-        self.axis_world = self.body_a.quaternion.conjugate().rotate(self.axis_local).normalized()
+        self.axis_world = self.body_b.quaternion.conjugate().rotate(self.axis_local).normalized()
 
-        self.solve_linear(dt)
-        self.solve_angular(dt)
-        self.d = 1
+        if self.d != 5:
+            self.solve_linear(dt)
+            self.solve_angular(dt)
 
 
     # ------------------------------------------------------------------ #
@@ -139,8 +140,7 @@ class HingeJoint(Joint):
         world_anchor_B = self.body_b.position + rB
         pos_error = world_anchor_B - world_anchor_A
 
-        beta = 0.2
-        bias = pos_error * (beta / dt)
+        bias = pos_error * (self.beta / dt)
 
         # Effective mass matrix  K = (1/mA + 1/mB)*I + [rA]x * IinvA * [rA]x^T
         #                                             + [rB]x * IinvB * [rB]x^T
@@ -169,10 +169,14 @@ class HingeJoint(Joint):
             a.angular_velocity += Vector3.from_np(
                 IinvA @ np.cross(rA.to_np(), impulse_np)
             )
+            # b.angular_velocity = a.angular_velocity.floor()
+
         if not b.isKinematic:
             b.angular_velocity -= Vector3.from_np(
                 IinvB @ np.cross(rB.to_np(), impulse_np)
             )
+            # b.angular_velocity = a.angular_velocity.floor()
+
 
     # ------------------------------------------------------------------ #
     #  2) Angular constraint — only allow rotation around the hinge axis
@@ -184,7 +188,7 @@ class HingeJoint(Joint):
         IinvB = b.Iinv_world()
 
         # Hinge axis in world space (attached to body A)
-        axis_world = self.body_b.quaternion.conjugate().rotate(self.axis_local).normalized()
+        axis_world = self.body_a.quaternion.conjugate().rotate(self.axis_local).normalized()
 
         # Build two axes perpendicular to the hinge axis
         t1 = self._perp(axis_world)
@@ -206,7 +210,7 @@ class HingeJoint(Joint):
         # Baumgarte angular correction
         q_rel = self.body_a.quaternion.inverse() * self.body_b.quaternion
 
-        self.clamp_rotation(q_rel, IinvA, IinvB, a, b)
+        # self.clamp_rotation(q_rel, IinvA, IinvB, a, b)
 
         q_error = q_rel * self.initial_rel_rot.inverse()
 
@@ -217,8 +221,8 @@ class HingeJoint(Joint):
         ang_error = err_vec * 2.0
 
         # Project the angular error onto the two constrained axes
-        beta = 0.2
-        bias = J @ ang_error.to_np() * (beta / dt)       # (2,)
+
+        bias = J @ ang_error.to_np() * (self.beta / dt)       # (2,)
 
         # Solve for the 2D impulse
         ang_impulse_2d = -np.linalg.solve(K_ang, vel_error + bias)  # (2,)
@@ -229,8 +233,11 @@ class HingeJoint(Joint):
         # Apply angular impulse
         if not a.isKinematic:
             a.angular_velocity -= Vector3.from_np(IinvA @ ang_impulse_np)
+            # a.angular_velocity = a.angular_velocity.floor()
         if not b.isKinematic:
             b.angular_velocity += Vector3.from_np(IinvB @ ang_impulse_np)
+            # b.angular_velocity = b.angular_velocity.floor()
+
 
         # ---------------------------------------------------------------
         #  3) Hinge-axis friction (optional)

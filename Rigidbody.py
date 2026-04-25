@@ -220,7 +220,8 @@ class Rigidbody:
         # if mag > 0:
         #     self.angular_velocity -= w.normalized() * (0.05 * mag * dt / (1/60))
 
-        self.parent.quaternion = Quaternion.euler_radians(ang_disp) * self.parent.quaternion
+        self.parent.quaternion = self.parent.quaternion * Quaternion.euler_radians(ang_disp)  # this line was
+        # originally mistakenly used local rotation, the fix may cause extreme instability in physics
 
 
         self.parent.position += self.velocity * dt \
@@ -359,7 +360,7 @@ class Rigidbody:
         # 2. Get the rotation matrix
         # If using a quaternion:
         R = self.parent.quaternion.to_matrix3()
-        R = Quaternion().to_matrix3()
+        # R = Quaternion().to_matrix3()
 
         # 3. Transform to world space: R * I_inv * R_transpose
         return R @ I_inv_body @ R.T
