@@ -92,11 +92,15 @@ class ServoControllerTest(ServoController):
     def Update(self, dt):
         self._axis = self.parent.get_component(HingeJoint).axis_world.normalized()
         # print(self._axis)
-        if self.time2 > 2:
-            # if not self.did:
-            #     self.parent.get_component(HingeJoint).attach(self.parent)
-            #     self.did = True
+        # if self.time2 > 4 and self.time2 < 5:
+        #     self.did = True
+        #     self.parent.Rigidbody.angular_velocity = Vector3()
+        if self.time2 > 3:
+            # self.parent.get_component(HingeJoint).d = 5
+            # self.parent.get_component(HingeJoint).beta = 0
+
             if abs(self.target_angle) > 100 and self.time > 1:
+
                 self.direction *= -1
                 self.time = 0
             self.time += dt
@@ -118,8 +122,10 @@ mount = Object(name="mount", size=Vector3(1, 1, 1), position=Vector3(0, -2, 0)).
 servo = Object(name="servo", ).add_component(BoxCollider(), Rigidbody(angular_velocity=Vector3(0, 0, 0)),
                                              HingeJoint(mount, axis1, anchor=Vector3(0, -2, 0)), ServoControllerTest(axis1))
 
-mount.quaternion *= Quaternion.euler(Vector3(20, 0, 0))
+mount.quaternion *= Quaternion.euler(Vector3(90, 0, 0))
+# servo.quaternion *= Quaternion.euler(Vector3(90, 0, 0))
 
+# servo.position = Vector3(0,-2, -2)
 test = Object(name ="test1", size=Vector3(0, 0, 0)).add_component(HingeJointTest(servo.get_component(HingeJoint)))
 
 
