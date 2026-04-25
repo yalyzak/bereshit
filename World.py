@@ -86,7 +86,7 @@ class World:
             for joint in joints:
                 joint.solve(dt)
 
-    def solve_collectionsLastIteration(self, dt, contacts):
+    def solve_collections(self, dt, contacts):
         for contact_points in contacts:
             for contact in contact_points:
                 contact_point = contact['contact_point']
@@ -94,17 +94,6 @@ class World:
                 rb1, rb2 = contact['rb1'], contact['rb2']
                 penetration = contact['penetration']
                 Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=False)
-
-    def solve_collections(self, dt, contacts):
-        for _ in range(20):  # basically unnecessary because v_ral is always >=0 after the first iteration but doesn't
-            # hurt
-            for contact_points in contacts:
-                for contact in contact_points:
-                    contact_point = contact['contact_point']
-                    normal = contact['normal']
-                    rb1, rb2 = contact['rb1'], contact['rb2']
-                    penetration = contact['penetration']
-                    Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=False)
 
     def solve_collectionsFirstIteration(self, children, dt):
 

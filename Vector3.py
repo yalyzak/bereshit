@@ -17,10 +17,9 @@ class Vector3:
             self.y = y
             self.z = z
 
-    def floor(self):
-        factor = 10 ** 5
+    def floor(self, factor = 10 ** 5):
         return Vector3(math.floor(self.x * factor) / factor, math.floor(self.y * factor) / factor,
-                       math.floor(self.x * factor) / factor)
+                       math.floor(self.z * factor) / factor)
 
     def __iadd__(self, other):
         if isinstance(other, Vector3):
