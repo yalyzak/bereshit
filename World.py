@@ -93,7 +93,7 @@ class World:
                 normal = contact['normal']
                 rb1, rb2 = contact['rb1'], contact['rb2']
                 penetration = contact['penetration']
-                Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=False)
+                Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=True)
 
     def solve_collectionsFirstIteration(self, children, dt):
 
@@ -115,7 +115,7 @@ class World:
                 if (first_rb is None or first_rb.isKinematic) and (second_rb is None or second_rb.isKinematic):
                     continue
 
-                result = first_collider.check_collision(second_collider, single_point=True, collided_a=collided_a,
+                result = first_collider.check_collision(second_collider, single_point=False, collided_a=collided_a,
                                                         collided_b=collided_b)
                 if result is None:
                     continue
@@ -130,7 +130,7 @@ class World:
                             contact_point = Vector3(contact_point)
 
                             Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt,
-                                                    apply_friction=False)
+                                                    apply_friction=True)
 
                             contacts2.append({
                                 "rb1": rb1,

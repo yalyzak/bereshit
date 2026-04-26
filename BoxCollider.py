@@ -549,6 +549,10 @@ class BoxCollider(Collider):
         return result, rb
 
     def attach(self, owner_object):
+        box = owner_object.get_component(BoxCollider)  # will remove duplicate renders by default
+        if box:
+            owner_object.remove_component("Collider")
+
         if self.size == None:
             self.size = owner_object.size
 

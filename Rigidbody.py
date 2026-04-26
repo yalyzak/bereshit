@@ -47,9 +47,11 @@ class Rigidbody:
 
         self.normal_force = Vector3()
         self._COM = COM
+
     def apply_gravity(self, Gravity):
         if self.useGravity:
             self.force += Gravity * self.mass
+
     def _resolve_dynamic_collision(self, other, normal, J, r1, r2):
         """
         Applies linear and angular impulse to both dynamic bodies, factoring restitution.
@@ -80,17 +82,7 @@ class Rigidbody:
             if rb2.Freeze_Rotation.z == 0:
                 rb2.angular_velocity.z -= ang_impulse.z
 
-        v1 = rb1.velocity if not rb1.isKinematic else Vector3()
-        v2 = rb2.velocity if not rb2.isKinematic else Vector3()
 
-        w1 = rb1.angular_velocity if not rb1.isKinematic else Vector3()
-        w2 = rb2.angular_velocity if not rb2.isKinematic else Vector3()
-
-        v1_point = v1 + w1.cross(-r1)
-        v2_point = v2 + w2.cross(-r2)
-
-        v_rel = v2_point - v1_point  # ✅ B − A
-        v_norm = v_rel.dot(normal)
 
     @staticmethod
     def solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction= False):
@@ -136,9 +128,9 @@ class Rigidbody:
 
         rb1._resolve_dynamic_collision(rb2, normal, J, r1, r2)
         if apply_friction:
-            rb1._apply_friction_impulse(rb2, normal, J, contact_point)
+            rb1._apply_friction_impulse(rb2, relative_vel, normal, J, r1, r2)
 
-    def _apply_friction_impulse(self, other, normal, J, contact_point):
+    def _apply_friction_impulse(self, other, relative_vel, normal, J, r1, r2):
         """
         Applies Coulomb friction impulse based on the relative velocity,
         including angular friction effect.
@@ -146,11 +138,7 @@ class Rigidbody:
         rb1 = self
         rb2 = other
 
-        v1 = rb1.velocity if rb1 and not rb1.isKinematic else Vector3(0, 0, 0)
-        v2 = rb2.velocity if rb2 and not rb2.isKinematic else Vector3(0, 0, 0)
-        v_rel = v1 - v2
-
-        tangent = v_rel - normal * v_rel.dot(normal)
+        tangent = relative_vel - normal * relative_vel.dot(normal)
         tangent_length = tangent.magnitude()
 
         if tangent_length < 1e-6:
@@ -169,12 +157,25 @@ class Rigidbody:
             mu = Rigidbody._default_friction
 
         # Compute friction impulse scalar
-        Jt_magnitude = -v_rel.dot(tangent)
+        Jt_magnitude = -relative_vel.dot(tangent)
+
         denom = 0.0
+
         if rb1 and not rb1.isKinematic:
             denom += 1.0 / rb1.mass
+
+            r1xt = r1.cross(tangent)
+            ang1 = rb1.Iinv_world() @ r1xt.to_np()
+            ang1 = Vector3.from_np(ang1)
+            denom += (ang1.cross(r1)).dot(tangent)
+
         if rb2 and not rb2.isKinematic:
             denom += 1.0 / rb2.mass
+
+            r2xt = r2.cross(tangent)
+            ang2 = rb2.Iinv_world() @ r2xt.to_np()
+            ang2 = Vector3.from_np(ang2)
+            denom += (ang2.cross(r2)).dot(tangent)
 
         if denom == 0.0:
             return
@@ -184,18 +185,35 @@ class Rigidbody:
 
         Jt = tangent * Jt_magnitude
 
-        # Apply linear and angular friction impulses
+        self._apply_impulse_pair(other, Jt, r1, r2)
+
+    def _apply_impulse_pair(self, other, impulse_vec, r1, r2):
+        rb1 = self
+        rb2 = other
+
         if rb1 and not rb1.isKinematic:
-            rb1.velocity += Jt / rb1.mass
-            # r1 = contact_point - rb1.parent.position
-            # angular_impulse1 = r1.cross(Jt)
-            # rb1.angular_velocity += Vector3.from_np(rb1.inverse_inertia @ angular_impulse1.to_np())
+            rb1.velocity += -impulse_vec / rb1.mass
+            torque1 = r1.cross(-impulse_vec)
+            ang1 = -Vector3.from_np(rb1.Iinv_world() @ torque1.to_np())
+
+            if rb1.Freeze_Rotation.x == 0:
+                rb1.angular_velocity.x += ang1.x
+            if rb1.Freeze_Rotation.y == 0:
+                rb1.angular_velocity.y += ang1.y
+            if rb1.Freeze_Rotation.z == 0:
+                rb1.angular_velocity.z += ang1.z
 
         if rb2 and not rb2.isKinematic:
-            rb2.velocity -= Jt / rb2.mass
-            # r2 = contact["r2"]
-            # angular_impulse2 = r2.cross(-Jt)
-            # rb2.angular_velocity += Vector3.from_np(rb2.inverse_inertia @ angular_impulse2.to_np())
+            rb2.velocity += impulse_vec / rb2.mass
+            torque2 = r2.cross(impulse_vec)
+            ang2 = -Vector3.from_np(rb2.Iinv_world() @ torque2.to_np())
+
+            if rb2.Freeze_Rotation.x == 0:
+                rb2.angular_velocity.x += ang2.x
+            if rb2.Freeze_Rotation.y == 0:
+                rb2.angular_velocity.y += ang2.y
+            if rb2.Freeze_Rotation.z == 0:
+                rb2.angular_velocity.z += ang2.z
 
     def integrat(self, dt):
         # === 4) INTEGRATION PHASE ===

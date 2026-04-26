@@ -109,10 +109,10 @@ class MeshRander:
         mesh = trimesh.load(self._obj_path, force='mesh')
 
         # mesh_size = mesh.scale
-
-        TextureImage = mesh.visual.material.baseColorTexture
-        self._TextureImage = TextureImage
-        self._uv = mesh.visual.uv
+        if mesh.visual.defined:
+            TextureImage = mesh.visual.material.baseColorTexture
+            self._TextureImage = TextureImage
+            self._uv = mesh.visual.uv
         if not isinstance(mesh, trimesh.Trimesh):
             raise TypeError("Loaded file is not a mesh")
 
