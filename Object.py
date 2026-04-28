@@ -326,46 +326,17 @@ class Object:
                                           self.rotation.y,
                                           self.rotation.z)
 
-    def add_rotation(self, delta: Vector3, forall=False):
-        """
-        Add an incremental rotation `delta` (world‐space Euler angles)
-        on top of the current world rotation. Then update local_rotation.
-        """
-        # 1. Compute the new world rotation by simple vector addition
-        new_world_rot = Vector3(
-            self.rotation.x + delta.x,
-            self.rotation.y + delta.y,
-            self.rotation.z + delta.z
-        )
-
-        # 2. Delegate to set_rotation to keep local_rotation in sync
-        self.set_rotation(new_world_rot)
-        if forall:
-            self._set_rotation_recursive(delta)
-            self.set_projection(delta)
+    def add_rotation(self, delta):
+        self.quaternion *= delta
+        for child in self.children:
+            child.set_projection(delta, self.position)
 
     def add_rotation_old(self, rotation):
         self.set_rotation(self.rotation + rotation)
 
-    def set_projection(self, pivot=np.array([0, 0, 0])):
-        for child in self.children:
-            target = child
-            vector = target.position
-            # if np.allclose(pivot, [0, 0, 0]):
-            pivot = target.parent.position
-            angles = target.parent.local_rotation
-            rotated = rotate_vector_old(vector, pivot, angles)
-            # target.set_position(Vector3(*rotated))
-            target.position = Vector3(*rotated)
-            target.set_projection(pivot=pivot)
-
-    def find_center_of_gravity(self):
-        bereshit = self.get_all_children()
-        positions = [obj.position.to_tuple() for obj in bereshit]
-        masses = [obj.Rigidbody.mass for obj in bereshit]
-        x_cog, y_cog, z_cog = calculate_center_of_gravity_3d(positions, masses)
-        print(f"Center of Gravity: ({x_cog:.2f}, {y_cog:.2f}, {z_cog:.2f})")
-
+    def set_projection(self, delta, position):
+        self.position = delta.rotate(self.position - position) + position
+        self.quaternion *= delta
     @property
     def default_position(self):
         return self.__default_position

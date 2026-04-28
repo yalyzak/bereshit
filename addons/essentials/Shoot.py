@@ -1,16 +1,17 @@
 import random
 
 from bereshit import Object,Camera,Vector3, Rigidbody, BoxCollider, MeshRander, Quaternion, Render, Physics
+from bereshit.class_type import Collider
 import mouse  # pip install mouse
 from bereshit.render import Text,Box
 
 import copy
 class Shoot:
-    def __init__(self):
+    def __init__(self,force= 20):
         self.cooldown = 0.01   # seconds between shots
         self.timer = 0.0      # time passed since last shot
         self.speed = 10
-        self.force = 20
+        self.force = force
         self.shots = 10
         self.shots_text = Text(str(self.shots), center=(120,850), scale=1)
 
@@ -26,7 +27,7 @@ class Shoot:
         forward = self.parent.quaternion.rotate(Vector3(0,0,1))
         hits = Physics.RaycastAll(self.parent.position.to_np(),forward.to_np(), self.parent.World)
         for hit in hits:
-            if hit.point is not None and hits.collider != self.parent.Collider:
+            if hit.point is not None and hit.collider != self.parent.get_component(Collider):
                 hit.collider.parent.Rigidbody.AddForce(forward * self.force,Vector3.from_np(hit.point))#,Vector3.from_np(hit.point)
             # self.gimos.position = Vector3.from_np(hit)
     def Start(self):
