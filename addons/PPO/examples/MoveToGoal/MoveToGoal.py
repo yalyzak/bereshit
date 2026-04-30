@@ -8,17 +8,16 @@ class MoveToGoal:
     def __init__(self, goal):
         self.Agent = None
         self.goal = goal
-        self.speed = 100
+        self.speed = 500
 
     def attach(self, parent):
         self.Agent = parent.get_component("Agent")
 
     def OnEpisodeBegin(self):
         self.parent.reset_to_default()
-        default_position = self.parent.get_default_position()
-        self.parent.local_position = Vector3(random.uniform(-4, 4), default_position.y, random.uniform(-4, 4))
-        default_position = self.goal.get_default_position()
-        self.goal.local_position = Vector3(random.uniform(-4, 4), default_position.y, random.uniform(-4, 4))
+        self.goal.reset_to_default()
+        self.parent.local_position += Vector3(random.uniform(-4, 4), 0, random.uniform(-4, 4))
+        self.goal.local_position += Vector3(random.uniform(-4, 4), 0, random.uniform(-4, 4))
 
     def Update(self, dt):
         pos = self.parent.local_position
@@ -26,13 +25,13 @@ class MoveToGoal:
         obs = [pos.x, pos.y, pos.z, pos2.x, pos2.y, pos2.z]
         action, _, _ = self.Agent.get_continuous_action(obs)
         self.Move(action[0], action[1], dt)
-        # self.addRewardByDistance(pos, pos2, dt)
+        self.addRewardByDistance(pos, pos2)
     def Move(self, x, z, dt):
         self.parent.Rigidbody.velocity += Vector3(x, 0, z) * dt * self.speed
 
-    def addRewardByDistance(self, pos, pos2, dt):
+    def addRewardByDistance(self, pos, pos2):
         distance = (pos - pos2).magnitude()
-        reward = -distance * dt
+        reward = -distance * 0.01
         self.Agent.add_reward(reward)
 
     def OnCollisionEnter(self, Collision):
