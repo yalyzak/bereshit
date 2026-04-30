@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 
 class Vector3:
-
+    __slots__ = ("x", "y", "z")
     def __init__(self,x=0,y=0,z=0):
         if type(x) == tuple and len(x) == 3:
             self.x = x[0]
