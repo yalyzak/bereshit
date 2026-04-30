@@ -505,7 +505,7 @@ class BoxCollider(Collider):
         other_collider = getattr(other, 'collider', other)
         if other_collider is None:
             return None
-        collision = Collision(other, None)
+        collision = Collision(self, other_collider, None)
 
         result = self._SAT(other_collider)
         if result is None:
@@ -521,7 +521,9 @@ class BoxCollider(Collider):
         #     return None
         # result, rb = result
         result, rb = self._find_contaact_points_raycast(other_collider, collision_axis)
-        collision = Collision(other, -collision_axis)
+
+        collision1 = Collision(self, -collision_axis, None)
+        collision2 = Collision(other_collider, -collision_axis, None)
 
         if single_point:
             result = self._average_contact_data(result)
@@ -531,19 +533,19 @@ class BoxCollider(Collider):
         # collision_axis, smallest_overlap, collision_type, collision_axis_indices = result
 
         if self.is_trigger:
-            self.OnTriggerEnter(collision)
+            self.OnTriggerEnter(collision2)
         if other_collider.is_trigger:
-            other_collider.OnTriggerEnter(collision)
+            other_collider.OnTriggerEnter(collision1)
 
         if self.enter == False:
-            self.OnCollisionEnter(collision)
+            self.OnCollisionEnter(collision2)
         else:
-            self.OnCollisionStay(collision)
+            self.OnCollisionStay(collision2)
 
         if other_collider.enter == False:
-            other_collider.OnCollisionEnter(collision)
+            other_collider.OnCollisionEnter(collision1)
         else:
-            other_collider.OnCollisionStay(collision)
+            other_collider.OnCollisionStay(collision1)
 
         # return contact_points, rb
         return result, rb
