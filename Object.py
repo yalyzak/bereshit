@@ -350,6 +350,9 @@ class Object:
         for child in self.children:
             child.set_default_position()
 
+    def get_default_position(self):
+        return self.__default_position
+
     def reset_to_default(self):
         self.position = copy.copy(self.__default_position)
         if self.get_component("Rigidbody") is not None:
