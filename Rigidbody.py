@@ -232,6 +232,8 @@ class Rigidbody:
 
         ang_disp = self.angular_velocity * dt \
                    + 0.5 * self.angular_acceleration * dt * dt
+        if ang_disp.magnitude() > 0:
+            self._update_inertia_world()
         self.angular_velocity += self.angular_acceleration * dt
         w = self.angular_velocity
         mag = w.magnitude()
@@ -310,6 +312,7 @@ class Rigidbody:
                 [0.0, self.inertia.y, 0.0],
                 [0.0, 0.0, self.inertia.z]
             ])
+
         else:
             def box_inertia_vector(mass, hx, hy, hz, com_offset):
                 """
@@ -366,19 +369,18 @@ class Rigidbody:
             safe_inverse(self.inertia.z)
         ])
 
-    def Iinv_world(self):
-        # This should only be called for dynamic bodies
+
+
+    def _update_inertia_world(self):
         if not self or self.isKinematic:
-            return np.zeros((3, 3))
+            self._Iinv_world = np.zeros((3, 3))
+            return None
 
-        # 1. Get the local inverse inertia tensor (3x3 matrix)
-        # Ensure this is the INVERSE, not the base inertia
-        I_inv_body = self.inverse_inertia
-
-        # 2. Get the rotation matrix
-        # If using a quaternion:
         R = self.parent.quaternion.to_matrix3()
-        # R = Quaternion().to_matrix3()
+        self._Iinv_world = R @ self.inverse_inertia @ R.T
 
-        # 3. Transform to world space: R * I_inv * R_transpose
-        return R @ I_inv_body @ R.T
+    def Start(self):
+        self._update_inertia_world()
+
+    def Iinv_world(self):
+        return self._Iinv_world
