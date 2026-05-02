@@ -70,9 +70,9 @@ class HingeJoint(Joint):
 
 
         else:
-            hit = Physics.Raycast(self.body_b.position.to_np(), -(self.body_b.position - self.body_a.position).to_np(), self.body_a.Collider).point
+            hit = Physics.Raycast(self.body_b.position, -(self.body_b.position - self.body_a.position), self.body_a.Collider).point
             if hit is not None:
-                self.world_anchor = Vector3.from_np(hit)
+                self.world_anchor = hit
             else:
                 self.world_anchor = self.body_b.position  # fall back
 
