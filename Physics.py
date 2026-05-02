@@ -21,7 +21,6 @@ class Physics:
 
         hit = RaycastHit()
         if layerMask:
-
             hit = layerMask.Raycast(origin, direction, maxDistance)
         else:
             dis = float('inf')

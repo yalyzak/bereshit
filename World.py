@@ -7,14 +7,13 @@ import numpy as np
 from bereshit.Quaternion import Quaternion
 from bereshit.Rigidbody import Rigidbody
 from bereshit.Vector3 import Vector3
-from bereshit.ContactPoint import ContactPoint
-from bereshit.ContactPoint import ContactManifold
 from bereshit.Joint import Joint
 from bereshit.Collider import Collider
+from bereshit.Physics import Physics
 
 logger = logging.getLogger(__name__)
 class World:
-    def __init__(self, running_flag, children=None, gizmos=False, gravity=Vector3(0, -9.8, 0), tick=None, speed=None, physics_epochs=1):
+    def __init__(self, running_flag, children=None, gizmos=False, gravity=Vector3(0, -9.8, 0), tick=None, speed=None, physics_epochs=1, scale=1):
         self.RunningFlag = running_flag
         self.children = children or []
         self.Camera = self.search_by_component('Camera')
@@ -28,6 +27,15 @@ class World:
             obj.World = self
 
         self.physics_epochs = physics_epochs
+        self.scale = scale
+        self.set_static_variables()
+
+    def set_static_variables(self):
+        Rigidbody.Scale = self.scale
+        Collider.Scale = self.scale
+        Physics.World = self
+
+
     def add_object(self, object):
         self.children.append(object)
 

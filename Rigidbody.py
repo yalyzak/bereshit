@@ -18,12 +18,12 @@ class Rigidbody:
         # add more as needed
     }
     _default_friction = 0.6
-
+    Scale = 1
     def __init__(self, obj=None, mass=1.0, size=Vector3(1, 1, 1), position=Vector3(0, 0, 0),
                  center_of_mass=Vector3(0, 0, 0), velocity=None, angular_velocity=None, force=None,
                  isKinematic=False, useGravity=True, drag=0.98, friction_coefficient=0.6, restitution=0.6,COM=None, Freeze_Rotation=None):
         self.mass = mass
-        self.inv_mass = 1 / mass
+        self.invMass = 0.0 if isKinematic else 1 / mass
         self.material = ""
         self.drag = drag
         self.obj = obj

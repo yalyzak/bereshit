@@ -5,14 +5,7 @@ import numpy as np
 from bereshit.Vector3 import Vector3
 from bereshit.Joint import Joint
 from bereshit.Physics import Physics
-def skew(v: Vector3):
-    """Returns the 3x3 skew-symmetric (cross-product) matrix of a Vector3."""
-    x, y, z = v.x, v.y, v.z
-    return np.array([
-    [0, -z, y],
-    [z, 0, -x],
-    [-y, x, 0]
-    ])
+
 
 class HingeJoint(Joint):
     """
@@ -28,103 +21,30 @@ class HingeJoint(Joint):
     Total: 6 DOF → 1 DOF (free rotation around the hinge axis).
     """
 
-    def __init__(self, body_b, axis: Vector3, friction_coefficient=0.0,
-                 anchor=None, max_rotation=180, min_rotation=-180):
-        """
-        Parameters
-        ----------
-        body_b : Object
-            The other body to connect to (body_a is the owner).
-        axis : Vector3
-            Hinge axis expressed in body_a's local space.
-        friction_coefficient : float
-            Coulomb friction coefficient that resists rotation around the
-            hinge axis.  0 = frictionless hinge.
-        anchor : Vector3 or None
-            World-space anchor point.  If None, the midpoint between the
-            two bodies is used.
-        """
-        self.body_b = body_b
-        self.axis_local = axis.normalized()          # hinge axis in A's local frame
+    def __init__(self, body_b, axis, friction_coefficient=0.0, anchor=None, max_rotation=180, min_rotation=-180, beta=0.2):
+        super().__init__(body_b, anchor, beta)
+        self.axis_world = Vector3()
+        self.axis_local = axis.normalized()  # hinge axis in A's local frame
         self.friction_coefficient = friction_coefficient
-        self._anchor_override = anchor               # optional explicit anchor
         self.max_rotation = max_rotation
         self.min_rotation = min_rotation
-        self.world_anchor = Vector3()
-        self.axis_world = Vector3()
-        self.d = 0
-        self.beta = 0.2
-    # ------------------------------------------------------------------ #
-    #  Lifecycle
-    # ------------------------------------------------------------------ #
-    def attach(self, owner_object):
-        """Called by the component system when the joint is added."""
-        self.body_a = owner_object
-
-        self.a = self.body_a.get_component("Rigidbody")
-        self.b = self.body_b.get_component("Rigidbody")
-
-        # World-space anchor (default = midpoint)
-        if self._anchor_override is not None:
-            self.world_anchor = self._anchor_override
 
 
-        else:
-            hit = Physics.Raycast(self.body_b.position, -(self.body_b.position - self.body_a.position), self.body_a.Collider).point
-            if hit is not None:
-                self.world_anchor = hit
-            else:
-                self.world_anchor = self.body_b.position  # fall back
+    def __cast_anchor_default(self):
+        self.world_anchor = self.body_b.position
 
-        # Store anchor in each body's local frame
-        self.local_anchor_a = self.body_a.quaternion.inverse().rotate(
-            self.world_anchor - self.body_a.position
-        )
-        self.local_anchor_b = self.body_b.quaternion.inverse().rotate(
-            self.world_anchor - self.body_b.position
-        )
-
-        # Store the initial relative rotation so we can measure drift
-        self.initial_rel_rot = (
-            self.body_a.quaternion.inverse() * self.body_b.quaternion
-        )
-
-        return "joint"
-
-    # ------------------------------------------------------------------ #
-    #  Main solver — called every physics sub-iteration
-    # ------------------------------------------------------------------ #
     def solve(self, dt):
-        # Integrate pending forces into velocity (same pattern as FixedJoint)
-        if not self.a.isKinematic:
-            self.a.velocity += (self.a.force / self.a.mass) * dt
-            self.a.force = Vector3()
-        if not self.b.isKinematic:
-            self.b.velocity += (self.b.force / self.b.mass) * dt
-            self.b.force = Vector3()
-
+        super().solve(dt)
         self.axis_world = self.body_b.quaternion.conjugate().rotate(self.axis_local).normalized()
 
-        if self.d != 5:
-            self.solve_linear(dt)
-            self.solve_angular(dt)
-
-
-    # ------------------------------------------------------------------ #
-    #  1) Linear constraint — keep the anchors together
-    # ------------------------------------------------------------------ #
-    def _inv_mass(self, rb):
-        """Return 0 for kinematic bodies, else rb.inv_mass."""
-        return 0.0 if rb.isKinematic else rb.inv_mass
-
     def solve_linear(self, dt):
-        a, b = self.a, self.b
+        a, b = self.rbA, self.rbB
 
-        IinvA = a.Iinv_world()   # already returns zeros for kinematic
+        IinvA = a.Iinv_world()  # already returns zeros for kinematic
         IinvB = b.Iinv_world()
 
-        inv_mA = self._inv_mass(a)
-        inv_mB = self._inv_mass(b)
+        inv_mA = a.invMass
+        inv_mB = b.invMass
 
         # World-space lever arms
         rA = self.body_a.quaternion.conjugate().rotate(self.local_anchor_a)
@@ -145,13 +65,13 @@ class HingeJoint(Joint):
         # Effective mass matrix  K = (1/mA + 1/mB)*I + [rA]x * IinvA * [rA]x^T
         #                                             + [rB]x * IinvB * [rB]x^T
         inv_mass = inv_mA + inv_mB
-        rA_skew = skew(rA)
-        rB_skew = skew(rB)
+        rA_skew = rA.skew()
+        rB_skew = rB.skew()
 
         K = (
-            inv_mass * np.identity(3)
-            + rA_skew @ IinvA @ rA_skew.T
-            + rB_skew @ IinvB @ rB_skew.T
+                inv_mass * np.identity(3)
+                + rA_skew @ IinvA @ rA_skew.T
+                + rB_skew @ IinvB @ rB_skew.T
         )
 
         # Solve  K * impulse = -(dv + bias)
@@ -177,12 +97,8 @@ class HingeJoint(Joint):
             )
             # b.angular_velocity = a.angular_velocity.floor()
 
-
-    # ------------------------------------------------------------------ #
-    #  2) Angular constraint — only allow rotation around the hinge axis
-    # ------------------------------------------------------------------ #
     def solve_angular(self, dt):
-        a, b = self.a, self.b
+        a, b = self.rbA, self.rbB
 
         IinvA = a.Iinv_world()
         IinvB = b.Iinv_world()
@@ -198,14 +114,14 @@ class HingeJoint(Joint):
         rel_w = b.angular_velocity - a.angular_velocity
 
         # Construct the 2-row Jacobian: J = [t1^T; t2^T]
-        J = np.array([t1.to_np(), t2.to_np()])          # (2, 3)
+        J = np.array([t1.to_np(), t2.to_np()])  # (2, 3)
 
         # Effective mass:  K_ang = J * (IinvA + IinvB) * J^T   (2x2)
-        K_full = IinvA + IinvB                            # (3, 3)
-        K_ang = J @ K_full @ J.T                          # (2, 2)
+        K_full = IinvA + IinvB  # (3, 3)
+        K_ang = J @ K_full @ J.T  # (2, 2)
 
         # Velocity error projected onto the two constrained directions
-        vel_error = J @ rel_w.to_np()                     # (2,)
+        vel_error = J @ rel_w.to_np()  # (2,)
 
         # Baumgarte angular correction
         q_rel = self.body_a.quaternion.inverse() * self.body_b.quaternion
@@ -222,13 +138,13 @@ class HingeJoint(Joint):
 
         # Project the angular error onto the two constrained axes
 
-        bias = J @ ang_error.to_np() * (self.beta / dt)       # (2,)
+        bias = J @ ang_error.to_np() * (self.beta / dt)  # (2,)
 
         # Solve for the 2D impulse
         ang_impulse_2d = -np.linalg.solve(K_ang, vel_error + bias)  # (2,)
 
         # Expand back to 3D: impulse = t1 * lambda1 + t2 * lambda2
-        ang_impulse_np = J.T @ ang_impulse_2d             # (3,)
+        ang_impulse_np = J.T @ ang_impulse_2d  # (3,)
 
         # Apply angular impulse
         if not a.isKinematic:
@@ -238,14 +154,13 @@ class HingeJoint(Joint):
             b.angular_velocity += Vector3.from_np(IinvB @ ang_impulse_np)
             # b.angular_velocity = b.angular_velocity.floor()
 
-
         # ---------------------------------------------------------------
         #  3) Hinge-axis friction (optional)
         # ---------------------------------------------------------------
         # self.friction()
 
     def clamp_rotation(self, q_rel, IinvA, IinvB, a, b):
-        axis_world = self.body_a.quaternion.rotate(self.axis_local).normalized() # should be body b i think
+        axis_world = self.body_a.quaternion.rotate(self.axis_local).normalized()  # should be body b i think
 
         # extract angle from quaternion
         angle = 2 * math.atan2(
@@ -280,7 +195,7 @@ class HingeJoint(Joint):
 
             # Clamp by Coulomb friction
             max_friction = self.friction_coefficient * (
-                np.linalg.norm(ang_impulse_2d) + 1e-8
+                    np.linalg.norm(ang_impulse_2d) + 1e-8
             )
             friction_impulse = max(-max_friction,
                                    min(friction_impulse, max_friction))

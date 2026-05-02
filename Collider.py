@@ -2,6 +2,8 @@ from bereshit.Physics import RaycastHit
 
 
 class Collider:
+    Scale = 1
+
     def __init__(self, size=None, rotation=None, object_pointer=None, is_trigger=False):
         self.size = size
         self.rotation = rotation

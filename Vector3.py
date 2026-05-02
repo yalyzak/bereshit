@@ -194,80 +194,10 @@ class Vector3:
     def __repr__(self):
         return f"Vector3(x={self.x}, y={self.y}, z={self.z})"
 
-# import numpy as np
-
-# class Vector3:
-#     def __init__(self, x=0, y=0, z=0):
-#         if isinstance(x, (tuple, list, np.ndarray)) and len(x) == 3:
-#             self.v = np.array(x, dtype=float)
-#         else:
-#             self.v = np.array([x, y, z], dtype=float)
-#
-#     @property
-#     def x(self):
-#         return self.v[0]
-#
-#     @x.setter
-#     def x(self, value):
-#         self.v[0] = value
-#
-#     @property
-#     def y(self):
-#         return self.v[1]
-#
-#     @y.setter
-#     def y(self, value):
-#         self.v[1] = value
-#
-#     @property
-#     def z(self):
-#         return self.v[2]
-#
-#     @z.setter
-#     def z(self, value):
-#         self.v[2] = value
-#
-#     # NumPy-powered methods
-#     def magnitude(self):
-#         return np.linalg.norm(self.v)
-#
-#     def normalized(self):
-#         n = self.magnitude()
-#         if n == 0:
-#             return Vector3(0, 0, 0)
-#         return Vector3(self.v / n)
-#
-#     def dot(self, other):
-#         return float(np.dot(self.v, other.v))
-#
-#     def cross(self, other):
-#         return Vector3(np.cross(self.v, other.v))
-#
-#
-#
-#     def __add__(self, other):
-#         return Vector3(self.v + other.v)
-#
-#     def __sub__(self, other):
-#         return Vector3(self.v - other.v)
-#
-#     def __mul__(self, scalar):
-#         return Vector3(self.v * scalar)
-#
-#     def __rmul__(self, other):
-#         return self.__mul__(other)
-#     def __truediv__(self, other):
-#         if isinstance(other, Vector3):
-#             if np.any(other.v == 0):
-#                 raise ZeroDivisionError("Component-wise division by zero")
-#             return Vector3(self.v / other.v)
-#
-#         if other == 0:
-#             raise ZeroDivisionError("Vector3 division by zero")
-#
-#         return Vector3(self.v / other)
-#
-#     def __iter__(self):
-#         return iter(self.v)
-#     def __repr__(self):
-#         return f"Vector3({self.x}, {self.y}, {self.z})"
+    def skew(self):
+        x, y, z = self.x, self.y, self.z
+        return np.array([
+            [0, -z, y],
+            [z, 0, -x],
+            [-y, x, 0]
+        ])

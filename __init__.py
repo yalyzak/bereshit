@@ -11,9 +11,6 @@ from .FixedJoint import FixedJoint
 from .HingeJoint import HingeJoint
 from .render import BereshitRenderer as Render
 from .render import Text as Text
-from .ContactPoint import ContactManifold
-from .ContactPoint import ContactPoint
-
 from .Physics import Physics
 from .Physics import RaycastHit
 

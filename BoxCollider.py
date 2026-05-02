@@ -25,8 +25,9 @@ class BoxCollider(Collider):
         result = BoxCollider.__generate_contacts(result)
         return result
 
-    def Raycast(self, origin, direction, maxDistance=float('inf'), hit=None):
-        return self.__ray_obb_intersection(origin, direction, self.parent.position.to_np(), self.parent.quaternion.conjugate().to_matrix3(), self.parent.size.to_np() * 0.5)
+    def Raycast(self, origin, direction, maxDistance=float('inf'), hit=None):  # needs fixing
+        return self.__ray_obb_intersection(origin, direction, self.parent.position.to_np(),
+                                           self.parent.quaternion.to_matrix3(), self.parent.size.to_np() * 0.5)
 
     @staticmethod
     def __generate_contacts(sat_result):
@@ -408,6 +409,3 @@ class BoxCollider(Collider):
 
         self.obj = owner_object
         return "Collider"  # need to be change to "Collider" but fucks up the whole update loop
-
-
-
