@@ -289,9 +289,8 @@ class Rigidbody:
         self.force += force
 
         if ContactPoint is not None:
-            ContactPoint = self.parent.position + ContactPoint
             # r is the lever arm (vector from center of mass to contact point)
-            r =  ContactPoint - self.parent.position
+            r = self.parent.position - ContactPoint
             # torque = r × F
             self.torque += r.cross(force)
 
@@ -355,11 +354,6 @@ class Rigidbody:
         self.material = owner_object.material.kind
         self.forward = owner_object.quaternion.rotate(owner_object.position)
         EPSILON = 1e-8  # Small value to avoid division by zero
-
-
-
-
-
         def safe_inverse(value):
             return 1.0 / value if abs(value) > EPSILON else 0.0
 
@@ -368,6 +362,8 @@ class Rigidbody:
             safe_inverse(self.inertia.y),
             safe_inverse(self.inertia.z)
         ])
+        self.parent = owner_object
+        self._update_inertia_world()
 
 
 
@@ -378,9 +374,6 @@ class Rigidbody:
 
         R = self.parent.quaternion.to_matrix3()
         self._Iinv_world = R @ self.inverse_inertia @ R.T
-
-    def Start(self):
-        self._update_inertia_world()
 
     def Iinv_world(self):
         return self._Iinv_world
