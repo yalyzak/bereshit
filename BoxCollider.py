@@ -1,424 +1,135 @@
-from bereshit.Collider import Collider, ContactPoints, Collision
-
-
 import numpy as np
 
 from bereshit.Vector3 import Vector3
 from bereshit.Quaternion import Quaternion
 from bereshit.Physics import RaycastHit
+from bereshit.Collider import Collider, ContactPoints, Collision
 
 
 class BoxCollider(Collider):
-    def _find_contaact_points_raycast(self, other_collider, collision_axis):
-        hits = set()
-        edges = other_collider.edges()
-        ver = other_collider.vertices()
+    def check_collision(self, other, single_point=False, collided_a=True, collided_b=True):
 
-        for edge in edges:
-            if len(hits) < 4:
-                start, end = edge
-                vector = ver[end] - ver[start]
-                norm = np.linalg.norm(vector)
-                hit = self.Raycast(ver[start], vector / norm, maxDistance=norm)
-                if hit.point is not None:
-                    V = hit.point - self.parent.position
-                    if V.dot(collision_axis) > 0:
-                        collision_axis = -collision_axis
-                    hits.add(hit.point)
+        other_collider = getattr(other, 'collider', other)
+        if other_collider is None:
+            return None
+        collision = Collision(self, other_collider, None)
 
-                rb = (self, other_collider)
+        result = self.__SAT(other_collider)
+        if result is None:
+            if (self.stay or self.enter) and not collided_a:
+                self.OnCollisionExit(collision)
+            if (other_collider.stay or other_collider.enter) and not collided_b:
+                other_collider.OnCollisionExit(collision)  # could creat problems if two objects collide at once
+            return None
 
-        if len(hits) == 0:
-            ver = self.vertices()
-            for edge in edges:
-                # if len(hits) == 4:
-                #     continue
-                start, end = edge
-                vector = ver[end] - ver[start]
-                norm = np.linalg.norm(vector)
-                hit = other_collider.Raycast(ver[start], vector / norm, maxDistance=norm)
-                if hit.point is not None:
-                    V = hit.point - other_collider.parent.position  # i think that maybe i need to add if collision_type == b then use self.other_collider.position
-                    if V.dot(collision_axis) > 0:
-                        collision_axis = -collision_axis
-                    hits.add(hit.point)
-                    rb = (other_collider, self)
-        contact_points = list(hits)
-        contact_points = ContactPoints(contact_points, -collision_axis, 0)
-        return contact_points
-
-    def _find_contaact_points(self, a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type,
-                              collision_axis_indices, other):
-
-        if collision_type == "a" or collision_type == "b":
-            return self._FaceToFace(a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type,
-                                    collision_axis_indices, other)
-
-        else:
-            [None, (other, self)]
-
-    def get_bounds(self):
-        # Get 8 corners in local space
-        half = self.size * 0.5
-        local_corners = [
-            Vector3(x, y, z)
-            for x in (-half.x, half.x)
-            for y in (-half.y, half.y)
-            for z in (-half.z, half.z)
-        ]
-
-        # Rotate and translate to world space
-        world_corners = [rotate_vector_old(corner, self.obj.position, self.obj.rotation) + self.obj.position for corner
-                         in
-                         local_corners]
-
-        # Find min/max of all corners
-        min_bound = Vector3(
-            min(c.x for c in world_corners),
-            min(c.y for c in world_corners),
-            min(c.z for c in world_corners)
-        )
-        max_bound = Vector3(
-            max(c.x for c in world_corners),
-            max(c.y for c in world_corners),
-            max(c.z for c in world_corners)
-        )
-        bounds = []
-        for child in self.obj.get_children_bereshit():
-            bounds = child.collider.get_bounds()
-        bounds.append([min_bound, max_bound])
-        return bounds
-
-    def vertices(self):
-        center, size, rotation = self.parent.position, self.size, self.obj.quaternion.conjugate()
-        R = rotation.to_matrix3()
-        w, h, d = np.array(size) / 2
-        corners = np.array([
-            [-w, -h, -d],
-            [w, -h, -d],
-            [w, h, -d],
-            [-w, h, -d],
-            [-w, -h, d],
-            [w, -h, d],
-            [w, h, d],
-            [-w, h, d],
-        ])
-        rotated = corners @ R.T
-        return rotated + center.to_np()
-
-    def triangles(self):
-        vertices = self.vertices()
-        # --- Define triangles using vertex indices ---
-        # Each triplet = one triangle
-        tris_idx = [
-            # Front face (-Z)
-            [0, 1, 2], [0, 2, 3],
-            # Back face (+Z)
-            [4, 6, 5], [4, 7, 6],
-            # Left face (-X)
-            [0, 3, 7], [0, 7, 4],
-            # Right face (+X)
-            [1, 5, 6], [1, 6, 2],
-            # Bottom face (-Y)
-            [0, 4, 5], [0, 5, 1],
-            # Top face (+Y)
-            [3, 2, 6], [3, 6, 7],
-        ]
-
-        # --- Build triangle vertex arrays ---
-        triangles = [vertices[i] for i in tris_idx]
-        triangles = [np.array([vertices[a], vertices[b], vertices[c]]) for a, b, c in tris_idx]
-
-        return triangles
-
-    def edges(self):
-        return np.array([
-            [0, 1], [1, 2], [2, 3], [3, 0],
-            [4, 5], [5, 6], [6, 7], [7, 4],
-            [0, 4], [1, 5], [2, 6], [3, 7]
-        ])
-
-    def faces(self):
-
-        """
-        Returns the 6 faces of the box as arrays of 4 vertices each.
-        The vertex order for each face is counter-clockwise when looking at the face.
-        """
-        v = self.vertices()
-
-        # Define faces using vertex indices (each list = one face of 4 corners)
-        face_indices = [
-            # Front (-Z)
-            [0, 1, 2, 3],
-            # Back (+Z)
-            [4, 5, 6, 7],
-            # Left (-X)
-            [0, 3, 7, 4],
-            # Right (+X)
-            [1, 5, 6, 2],
-            # Bottom (-Y)
-            [0, 4, 5, 1],
-            # Top (+Y)
-            [3, 2, 6, 7],
-        ]
-
-        # Build the faces as arrays of vertex positions
-        faces = [np.array([v[i] for i in face]) for face in face_indices]
-        return faces
-
-    def temp(self, center, half_size, R):
-        faces = []
-        axes = [R[:, 0], R[:, 1], R[:, 2]]  # local x, y, z directions
-        names = ["+X", "-X", "+Y", "-Y", "+Z", "-Z"]
-
-        for i, axis in enumerate(axes):
-            for sign in [1, -1]:
-                # Face center: move from box center along the face normal
-                face_center = center + sign * axis * half_size[i]
-
-                # Half-size of face: drop the normal axis
-                face_half = np.delete(half_size, i)
-
-                # Build rotation matrix for the face (tangential axes)
-                tangential_axes = [axes[j] for j in range(3) if j != i]
-                face_R = np.column_stack(tangential_axes + [sign * axis])  # x,y,toward normal
-
-                faces.append({
-                    "name": f"{'+' if sign > 0 else '-'}{['X', 'Y', 'Z'][i]}",
-                    "center": face_center,
-                    "half_size": face_half,
-                    "rotation": face_R
-                })
-        return faces
+        result = BoxCollider.__generate_contacts(result)
+        return result
 
     def Raycast(self, origin, direction, maxDistance=float('inf'), hit=None):
-        def ray_box_intersect(orig, dir, box_min, box_max, eps=1e-8):
-            inv_dir = 1.0 / (dir + eps * (dir == 0.0))
+        return self.__ray_obb_intersection(origin, direction, self.parent.position.to_np(), self.parent.quaternion.conjugate().to_matrix3(), self.parent.size.to_np() * 0.5)
 
-            tx1 = (box_min[0] - orig[0]) * inv_dir[0]
-            tx2 = (box_max[0] - orig[0]) * inv_dir[0]
+    @staticmethod
+    def __generate_contacts(sat_result):
+        normal = sat_result["normal"]
+        penetration = sat_result["penetration"]
+        collision_type = sat_result["type"]
+        axis_index = sat_result["axis_index"]
 
-            tmin = min(tx1, tx2)
-            tmax = max(tx1, tx2)
-            hit_axis = 0
+        A = sat_result["A"]
+        B = sat_result["B"]
 
-            ty1 = (box_min[1] - orig[1]) * inv_dir[1]
-            ty2 = (box_max[1] - orig[1]) * inv_dir[1]
+        # World data
+        a_center = A.obj.position
+        b_center = B.obj.position
 
-            tymin = min(ty1, ty2)
-            tymax = max(ty1, ty2)
+        a_axes = A.__get_axes(A.obj.quaternion)
+        b_axes = B.__get_axes(B.obj.quaternion)
 
-            if tymin > tmin:
-                tmin = tymin
-                hit_axis = 1
-            tmax = min(tmax, tymax)
+        a_half = A.obj.size * 0.5
+        b_half = B.obj.size * 0.5
 
-            tz1 = (box_min[2] - orig[2]) * inv_dir[2]
-            tz2 = (box_max[2] - orig[2]) * inv_dir[2]
+        # ---------------------------
+        # EDGE–EDGE CASE
+        # ---------------------------
+        if collision_type == "edge":
+            i, j = axis_index
 
-            tzmin = min(tz1, tz2)
-            tzmax = max(tz1, tz2)
+            p1, q1 = BoxCollider.__get_edge_segment(a_center, a_axes, a_half.to_np(), i, normal)
+            p2, q2 = BoxCollider.__get_edge_segment(b_center, b_axes, b_half.to_np(), j, -normal)
 
-            if tzmin > tmin:
-                tmin = tzmin
-                hit_axis = 2
-            tmax = min(tmax, tzmax)
+            c1, c2 = BoxCollider.__closest_points_between_segments(p1, q1, p2, q2)
 
-            if tmax < 0 or tmin > tmax:
-                return None, None
+            contact_point = [(c1 + c2) * 0.5]
+            return ContactPoints(contact_point, normal, penetration)
 
-            hit_point = orig + dir * tmin
-
-            normal = [0.0, 0.0, 0.0]
-            normal[hit_axis] = -1.0 if dir[hit_axis] > 0 else 1.0
-
-            return hit_point, np.array(normal)
-
-        def ray_obb_intersect(orig, dir, center, half_size, rotation_matrix):
-            """
-            Ray-OBB intersection.
-            Returns: (hit_world, normal_world) or (None, None)
-            """
-            # Transform ray into box local space
-            local_orig = rotation_matrix.T @ (orig - center)
-            local_dir = rotation_matrix.T @ dir
-
-            # Box extents in local space
-            box_min = -half_size
-            box_max = half_size
-
-            hit_local, normal_local = ray_box_intersect(local_orig, local_dir, box_min, box_max)
-
-            if hit_local is None:
-                return None
-
-            # Transform intersection and normal back to world space
-            hit_world = (rotation_matrix @ hit_local) + center
-            normal_world = rotation_matrix @ normal_local
-            normal_world /= np.linalg.norm(normal_world)
-
-            return RaycastHit(Vector3.from_np(hit_world), Vector3.from_np(normal_world), np.linalg.norm(hit_world - orig), self)
-
-        center = self.parent.position.to_np()
-        half_size = (self.parent.size / 2).to_np()
-        R = self.parent.quaternion.conjugate().to_matrix3()
-
-        faces = self.temp(center, half_size, R)
-
-        dis = float('inf')
-        hit = RaycastHit()
-        for face in faces:
-
-            temp_hit = ray_obb_intersect(origin, direction,
-                                         face["center"],
-                                         np.array([*face["half_size"], 0]),  # make it 3D if needed
-                                         face["rotation"])
-
-            if temp_hit is not None:
-                if temp_hit.distance < dis and temp_hit.distance < maxDistance:
-                    hit.distance = temp_hit.distance
-                    hit.point = temp_hit.point
-                    hit.normal = temp_hit.normal
-                    hit.collider = temp_hit.collider
-
-        return hit
-
-    # @staticmethod
-    def _FaceToFace(self, a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type, collision_axis_indices,
-                    other):
+        # ---------------------------
+        # FACE–FACE CASE
+        # ---------------------------
         if collision_type == "a":
-            ref_axes, ref_center, ref_half = a_axes, a_center, a_half
-            inc_axes, inc_center, inc_half = b_axes, b_center, b_half
+            ref = A
+            inc = B
+            ref_axis_index = axis_index
             flip = False
         else:
-            ref_axes, ref_center, ref_half = b_axes, b_center, b_half
-            inc_axes, inc_center, inc_half = a_axes, a_center, a_half
+            ref = B
+            inc = A
+            ref_axis_index = axis_index
             flip = True
+            normal = -normal  # ensure normal points A → B
 
-        def half_on_axis(h, i):
-            return h.x if i == 0 else h.y if i == 1 else h.z
+        ref_center = ref.obj.position
+        ref_axes = ref.__get_axes(ref.obj.quaternion.conjugate())
+        ref_half = ref.obj.size * 0.5
 
-        face_index = collision_axis_indices
-        ref_normal = ref_axes[face_index]
-        if flip:
+        inc_center = inc.obj.position
+        inc_axes = inc.__get_axes(inc.obj.quaternion.conjugate())
+        inc_half = inc.obj.size * 0.5
+
+        # Reference face
+        ref_normal = ref_axes[ref_axis_index]
+        if ref_normal.dot(normal) < 0:
             ref_normal = -ref_normal
 
-        # --- find incident face ---
-        incident_face = max(
-            range(3),
-            key=lambda i: abs(inc_axes[i].dot(ref_normal))
-        )
+        ref_face = BoxCollider.__get_face_vertices(ref_center, ref_axes, ref_half.to_np(), ref_axis_index,
+                                                   ref_normal)  # this is ok
 
-        # --- reference plane ---
-        plane_point = ref_center + ref_normal * half_on_axis(ref_half, face_index)
+        # Incident face (most opposite)
+        inc_face = BoxCollider.__get_incident_face(inc_center, inc_axes, inc_half.to_np(), normal)
+        # Clip incident face against reference side planes
+        clipped = inc_face
+        for i in range(4):
+            p1 = ref_face[i]
+            p2 = ref_face[(i + 1) % 4]
 
-        # --- incident face vertices ---
-        def get_face_vertices(center, axes, half, i):
-            j = (i + 1) % 3
-            k = (i + 2) % 3
+            edge = p2 - p1
+            plane_normal = edge.cross(ref_normal).normalized()
+            # Ensure it points inward
+            to_center = ref_center - p1
+            if plane_normal.dot(to_center) < 0:
+                plane_normal = -plane_normal
+            clipped = BoxCollider.__clip_polygon(clipped, p1, -plane_normal)
 
-            sign = -1 if axes[i].dot(ref_normal) > 0 else 1
-            verts = []
+            if not clipped:
+                break
 
-            for sj in (-1, 1):
-                for sk in (-1, 1):
-                    verts.append(
-                        center
-                        + axes[i] * sign * half_on_axis(half, i)
-                        + axes[j] * sj * half_on_axis(half, j)
-                        + axes[k] * sk * half_on_axis(half, k)
-                    )
-            return verts
+        # Keep only points behind reference face
+        contacts = []
+        ref_plane_d = ref_normal.dot(ref_face[0])
 
-        contacts = get_face_vertices(inc_center, inc_axes, inc_half, incident_face)
-
-        # --- clip ---
-        def clip_polygon(poly, n, p):
-            out = []
-            for i in range(len(poly)):
-                A = poly[i]
-                B = poly[(i + 1) % len(poly)]
-                da = (A - p).dot(n)
-                db = (B - p).dot(n)
-
-                if da <= 0:
-                    out.append(A)
-                if da * db < 0:
-                    t = da / (da - db)
-                    out.append(A + (B - A) * t)
-            return out
-
-        i = face_index
-        for axis_idx in ((i + 1) % 3, (i + 2) % 3):
-            axis = ref_axes[axis_idx]
-            limit = half_on_axis(ref_half, axis_idx)
-            for sign in (-1, 1):
-                contacts = clip_polygon(
-                    contacts,
-                    axis * sign,
-                    ref_center + axis * sign * limit
-                )
-
-        # --- final contacts ---
-        final_contacts = []
-        for p in contacts:
-            depth = (plane_point - p).dot(ref_normal)
+        for p in clipped:
+            depth = ref_plane_d - ref_normal.dot(p)
             if depth >= 0:
-                final_contacts.append((p, -ref_normal, depth))
-                V = p - a_center
-                if V.dot(ref_normal) > 0:
-                    rb = (other, self)
-                else:
-                    rb = (self, other)
+                projected_p = p + ref_normal * depth
+                contacts.append(projected_p)
 
-        return final_contacts, rb
+        return ContactPoints(contacts, sat_result["normal"], penetration)
 
-    @staticmethod
-    def _get_axes(rotation: Quaternion):
-        R = rotation.to_matrix3()
-        return [
-            Vector3(*R[:, 0]).normalized(),
-            Vector3(*R[:, 1]).normalized(),
-            Vector3(*R[:, 2]).normalized(),
-        ]
-
-    @staticmethod
-    def _project_box(center, axes, half_sizes, axis):
-        c = center.dot(axis)
-        r = sum(abs(axis.dot(a)) * h for a, h in zip(axes, half_sizes))
-        return c - r, c + r
-
-    @staticmethod
-    def _overlap_on_axis(p1, p2):
-        return not (p1[1] < p2[0] or p2[1] < p1[0])
-
-    @staticmethod
-    def _average_contact_data(contact_points):
-        if not contact_points:
-            return None  # or raise Exception
-
-        total_p = Vector3(0, 0, 0)
-        total_n = Vector3(0, 0, 0)
-        total_d = 0.0
-
-        for p, n, d in contact_points:
-            total_p += p
-            total_n += n
-            total_d += d
-
-        count = len(contact_points)
-        avg_p = total_p / count
-        avg_n = total_n.normalized()  # normalize the summed normal vector
-        avg_d = total_d / count
-
-        return avg_p, avg_n, avg_d
-
-    def _SAT(self, other_collider):
+    def __SAT(self, other_collider):
         a_center = self.obj.position
         b_center = other_collider.obj.position
 
-        a_axes = self._get_axes(self.obj.quaternion)
-        b_axes = self._get_axes(other_collider.obj.quaternion.conjugate())
+        a_axes = BoxCollider.__get_axes(self.obj.quaternion)
+        b_axes = BoxCollider.__get_axes(other_collider.obj.quaternion.conjugate())
 
         a_half = self.obj.size * 0.5
         b_half = other_collider.obj.size * 0.5
@@ -444,10 +155,10 @@ class BoxCollider(Collider):
         collision_axis_indices = None
 
         for source, indices, axis in axes_to_test:
-            proj_a = self._project_box(a_center, a_axes, a_half_sizes, axis)
-            proj_b = self._project_box(b_center, b_axes, b_half_sizes, axis)
+            proj_a = BoxCollider.__project_box(a_center, a_axes, a_half_sizes, axis)
+            proj_b = BoxCollider.__project_box(b_center, b_axes, b_half_sizes, axis)
 
-            if not self._overlap_on_axis(proj_a, proj_b):
+            if not BoxCollider.__overlap_on_axis(proj_a, proj_b):
                 return None
 
             overlap = min(proj_a[1], proj_b[1]) - max(proj_a[0], proj_b[0])
@@ -459,60 +170,230 @@ class BoxCollider(Collider):
 
         if (b_center - a_center).dot(collision_axis) < 0:
             collision_axis = -collision_axis
+            # if collision_type == "a":
+            #     collision_type = 'b'
+            # elif collision_type == "b":
+            #     collision_type = 'a'
 
-        return a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type, collision_axis_indices, collision_axis
+        return {
+            "normal": collision_axis,
+            "penetration": smallest_overlap,
+            "type": collision_type,  # "a", "b", "edge"
+            "axis_index": collision_axis_indices,
+            "A": self,
+            "B": other_collider
+        }
 
-    def check_collision(self, other, single_point=False, collided_a=True, collided_b=True):
+    @staticmethod
+    def __get_axes(rotation: Quaternion):
+        R = rotation.to_matrix3()
+        return [
+            Vector3(*R[:, 0]).normalized(),
+            Vector3(*R[:, 1]).normalized(),
+            Vector3(*R[:, 2]).normalized(),
+        ]
 
-        other_collider = getattr(other, 'collider', other)
-        if other_collider is None:
-            return None
-        collision1 = Collision(self, other_collider, None)
-        collision2 = Collision(other_collider, other_collider, None)
+    @staticmethod
+    def __project_box(center, axes, half_sizes, axis):
+        c = center.dot(axis)
+        r = sum(abs(axis.dot(a)) * h for a, h in zip(axes, half_sizes))
+        return c - r, c + r
 
-        result = self._SAT(other_collider)
-        if result is None:
-            if (self.stay or self.enter) and not collided_a:
-                self.OnCollisionExit(collision2)
-            if (other_collider.stay or other_collider.enter) and not collided_b:
-                other_collider.OnCollisionExit(collision1)  # could creat problems if two objects collide at once
-            return None
-        a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type, collision_axis_indices, collision_axis = result
+    @staticmethod
+    def __overlap_on_axis(p1, p2):
+        return not (p1[1] < p2[0] or p2[1] < p1[0])
 
-        # result = self._find_contaact_points(a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type, collision_axis_indices, other_collider)
-        # if result is None:
-        #     return None
-        # result, rb = result
-        result = self._find_contaact_points_raycast(other_collider, collision_axis)
+    @staticmethod
+    def __get_incident_face(center, axes, half_sizes, collision_normal):
+        # Find box axis most aligned with collision normal
+        best_index = 0
+        best_dot = axes[0].dot(collision_normal)
 
-        collision1 = Collision(self, -collision_axis, None)
-        collision2 = Collision(other_collider, -collision_axis, None)
+        for i in range(1, 3):
+            d = axes[i].dot(collision_normal)
+            if abs(d) > abs(best_dot):
+                best_dot = d
+                best_index = i
 
-        if single_point:
-            result = self._average_contact_data(result)
+        # Incident face normal should point opposite collision normal
+        face_normal = axes[best_index]
+        if face_normal.dot(collision_normal) > 0:
+            face_normal = -face_normal
 
-        if result is None or result == []:
-            return None
+        return BoxCollider.__get_face_vertices(
+            center,
+            axes,
+            half_sizes,
+            best_index,
+            face_normal
+        )
 
-        # collision_axis, smallest_overlap, collision_type, collision_axis_indices = result
+    @staticmethod
+    def __get_face_vertices(center, axes, half, axis_index, normal):
+        u = axes[(axis_index + 1) % 3]
+        v = axes[(axis_index + 2) % 3]
 
-        if self.is_trigger:
-            self.OnTriggerEnter(collision2)
-        if other_collider.is_trigger:
-            other_collider.OnTriggerEnter(collision1)
+        hu = float(half[(axis_index + 1) % 3])
+        hv = float(half[(axis_index + 2) % 3])
+        hn = float(half[axis_index])
 
-        if self.enter == False:
-            self.OnCollisionEnter(collision2)
-        else:
-            self.OnCollisionStay(collision2)
+        face_center = center + normal * hn
 
-        if other_collider.enter == False:
-            other_collider.OnCollisionEnter(collision1)
-        else:
-            other_collider.OnCollisionStay(collision1)
+        return [
+            face_center + u * hu + v * hv,
+            face_center - u * hu + v * hv,
+            face_center - u * hu - v * hv,
+            face_center + u * hu - v * hv,
+        ]
 
-        # return contact_points, rb
+    @staticmethod
+    def __clip_polygon(poly, plane_point, plane_normal):
+        result = []
+
+        for i in range(len(poly)):
+            a = poly[i]
+            b = poly[(i + 1) % len(poly)]
+
+            da = (a - plane_point).dot(plane_normal)
+            db = (b - plane_point).dot(plane_normal)
+
+            if da <= 0:
+                result.append(a)
+
+            if da * db < 0:
+                t = da / (da - db)
+                result.append(a + (b - a) * t)
+
         return result
+
+    @staticmethod
+    def __get_edge_segment(center, axes, half, axis_index, normal):
+        axis = axes[axis_index]
+
+        # pick edge direction
+        dir1 = axes[(axis_index + 1) % 3]
+        dir2 = axes[(axis_index + 2) % 3]
+
+        offset = (
+                axis * float(half[axis_index]) +
+                dir1 * float(half[(axis_index + 1) % 3]) * (1 if dir1.dot(normal) > 0 else -1) +
+                dir2 * float(half[(axis_index + 2) % 3]) * (1 if dir2.dot(normal) > 0 else -1)
+        )
+
+        p = center + offset - axis * float(half[axis_index])
+        q = center + offset + axis * float(half[axis_index])
+
+        return p, q
+
+    @staticmethod
+    def __closest_points_between_segments(p1, q1, p2, q2):
+        d1 = q1 - p1
+        d2 = q2 - p2
+        r = p1 - p2
+
+        a = d1.dot(d1)
+        e = d2.dot(d2)
+        f = d2.dot(r)
+
+        if a <= 1e-6 and e <= 1e-6:
+            return p1, p2
+
+        if a <= 1e-6:
+            t = f / e
+            t = max(0, min(1, t))
+            return p1, p2 + d2 * t
+
+        c = d1.dot(r)
+
+        if e <= 1e-6:
+            s = max(0, min(1, -c / a))
+            return p1 + d1 * s, p2
+
+        b = d1.dot(d2)
+        denom = a * e - b * b
+
+        if denom != 0:
+            s = max(0, min(1, (b * f - c * e) / denom))
+        else:
+            s = 0
+
+        t = (b * s + f) / e
+
+        if t < 0:
+            t = 0
+            s = max(0, min(1, -c / a))
+        elif t > 1:
+            t = 1
+            s = max(0, min(1, (b - c) / a))
+
+        return p1 + d1 * s, p2 + d2 * t
+
+    @staticmethod
+    def __ray_box_intersection(self, ray_origin, ray_dir, box_min, box_max):
+        tmin = float('-inf')
+        tmax = float('inf')
+
+        for i in range(3):
+            origin = ray_origin[i]
+            direction = ray_dir[i]
+            bmin = box_min[i]
+            bmax = box_max[i]
+
+            if abs(direction) < 1e-8:
+                # Ray parallel to slab
+                if origin < bmin or origin > bmax:
+                    return RaycastHit()
+            else:
+                t1 = (bmin - origin) / direction
+                t2 = (bmax - origin) / direction
+
+                t_near = min(t1, t2)
+                t_far = max(t1, t2)
+
+                tmin = max(tmin, t_near)
+                tmax = min(tmax, t_far)
+
+                if tmin > tmax:
+                    return RaycastHit()
+
+        # 🚨 Critical fix: reject hits behind the ray
+        if tmax < 0:
+            return RaycastHit()
+
+        # If inside the box, use exit point
+        t_hit = tmin if tmin >= 0 else tmax
+
+        hit_point = (
+            ray_origin[0] + ray_dir[0] * t_hit,
+            ray_origin[1] + ray_dir[1] * t_hit,
+            ray_origin[2] + ray_dir[2] * t_hit,
+        )
+
+        return RaycastHit(point=Vector3.from_np(hit_point), collider=self)
+
+    def __ray_obb_intersection(self, ray_origin, ray_dir, box_center, rotation_matrix, half_size):
+        """
+        ray_origin, ray_dir: np.array shape (3,)
+        box_center: np.array (3,)
+        rotation_matrix: 3x3 matrix (columns = box axes)
+        half_size: np.array (hx, hy, hz)
+
+        Returns:
+            (hit: bool, tmin: float, tmax: float)
+        """
+
+        # Step 1: move ray into box local space
+        # inverse rotation = transpose (for orthonormal matrix)
+        inv_rot = rotation_matrix.T
+
+        local_origin = inv_rot @ (ray_origin - box_center)
+        local_dir = inv_rot @ ray_dir
+
+        # Step 2: now it's just an AABB centered at (0,0,0)
+        box_min = -half_size
+        box_max = half_size
+
+        return BoxCollider.__ray_box_intersection(self, local_origin, local_dir, box_min, box_max)
 
     def attach(self, owner_object):
         box = owner_object.get_component(BoxCollider)  # will remove duplicate renders by default
@@ -527,3 +408,6 @@ class BoxCollider(Collider):
 
         self.obj = owner_object
         return "Collider"  # need to be change to "Collider" but fucks up the whole update loop
+
+
+
