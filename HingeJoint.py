@@ -3,7 +3,7 @@ import math
 import numpy as np
 
 from bereshit.Vector3 import Vector3
-from bereshit.class_type import Joint
+from bereshit.Joint import Joint
 from bereshit.Physics import Physics
 def skew(v: Vector3):
     """Returns the 3x3 skew-symmetric (cross-product) matrix of a Vector3."""

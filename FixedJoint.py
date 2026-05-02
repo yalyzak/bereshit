@@ -1,6 +1,7 @@
 import numpy as np
 from bereshit.Vector3 import Vector3
-from bereshit.class_type import Joint
+from bereshit.Joint import Joint
+
 
 
 def skew(v: Vector3):

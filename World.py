@@ -9,7 +9,7 @@ from bereshit.Rigidbody import Rigidbody
 from bereshit.Vector3 import Vector3
 from bereshit.ContactPoint import ContactPoint
 from bereshit.ContactPoint import ContactManifold
-from bereshit.class_type import Joint
+from bereshit.Joint import Joint
 from bereshit.Collider import Collider
 
 logger = logging.getLogger(__name__)
