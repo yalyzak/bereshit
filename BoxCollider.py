@@ -1,52 +1,14 @@
-import time
+from bereshit.Collider import Collider, ContactPoints, Collision
+
 
 import numpy as np
 
 from bereshit.Vector3 import Vector3
 from bereshit.Quaternion import Quaternion
 from bereshit.Physics import RaycastHit
-from bereshit.class_type import Collider
-from bereshit.Collision import Collision
 
 
 class BoxCollider(Collider):
-    def __init__(self, size=None, rotation=None, object_pointer=None, is_trigger=False):
-        self.size = size
-        self.rotation = rotation
-
-        self.obj = object_pointer
-        self.is_trigger = is_trigger
-        self.enter = False
-        self.stay = False
-
-    def OnCollisionEnter(self, collision):
-        self.enter = True
-
-        for component in self.parent.components.values():
-            if hasattr(component, 'OnCollisionEnter') and component.OnCollisionEnter is not None and component != self:
-                component.OnCollisionEnter(collision)
-
-    def OnCollisionStay(self, collision):
-        self.enter = False
-        self.stay = True
-        for component in self.parent.components.values():
-            if hasattr(component, 'OnCollisionStay') and component.OnCollisionStay is not None and component != self:
-                component.OnCollisionStay(collision)
-
-    def OnCollisionExit(self, collision):
-        self.enter = False
-        self.stay = False
-
-        for component in self.parent.components.values():
-            if hasattr(component, 'OnCollisionExit') and component.OnCollisionExit is not None and component != self:
-                component.OnCollisionExit(collision)
-
-    def OnTriggerEnter(self, collision):
-        """This method can be overwritten by subclasses to handle trigger events."""
-        for component in self.parent.components.values():
-            if hasattr(component, 'OnTriggerEnter') and component.OnTriggerEnter is not None and component != self:
-                component.OnTriggerEnter(collision)
-
     def _find_contaact_points_raycast(self, other_collider, collision_axis):
         hits = set()
         edges = other_collider.edges()
@@ -59,11 +21,11 @@ class BoxCollider(Collider):
                 norm = np.linalg.norm(vector)
                 hit = self.Raycast(ver[start], vector / norm, maxDistance=norm)
                 if hit.point is not None:
-                    V = Vector3(tuple(
-                        hit.point)) - self.parent.position
+                    V = hit.point - self.parent.position
                     if V.dot(collision_axis) > 0:
                         collision_axis = -collision_axis
-                    hits.add((tuple(hit.point), -collision_axis, 0))
+                    hits.add(hit.point)
+
                 rb = (self, other_collider)
 
         if len(hits) == 0:
@@ -76,14 +38,14 @@ class BoxCollider(Collider):
                 norm = np.linalg.norm(vector)
                 hit = other_collider.Raycast(ver[start], vector / norm, maxDistance=norm)
                 if hit.point is not None:
-                    V = Vector3(tuple(
-                        hit.point)) - other_collider.parent.position  # i think that maybe i need to add if collision_type == b then use self.other_collider.position
+                    V = hit.point - other_collider.parent.position  # i think that maybe i need to add if collision_type == b then use self.other_collider.position
                     if V.dot(collision_axis) > 0:
                         collision_axis = -collision_axis
-                    hits.add((tuple(hit.point), -collision_axis, 0))
+                    hits.add(hit.point)
                     rb = (other_collider, self)
         contact_points = list(hits)
-        return contact_points, rb
+        contact_points = ContactPoints(contact_points, -collision_axis, 0)
+        return contact_points
 
     def _find_contaact_points(self, a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type,
                               collision_axis_indices, other):
@@ -295,7 +257,7 @@ class BoxCollider(Collider):
             normal_world = rotation_matrix @ normal_local
             normal_world /= np.linalg.norm(normal_world)
 
-            return RaycastHit(hit_world, normal_world, np.linalg.norm(hit_world - orig), self)
+            return RaycastHit(Vector3.from_np(hit_world), Vector3.from_np(normal_world), np.linalg.norm(hit_world - orig), self)
 
         center = self.parent.position.to_np()
         half_size = (self.parent.size / 2).to_np()
@@ -505,14 +467,15 @@ class BoxCollider(Collider):
         other_collider = getattr(other, 'collider', other)
         if other_collider is None:
             return None
-        collision = Collision(self, other_collider, None)
+        collision1 = Collision(self, other_collider, None)
+        collision2 = Collision(other_collider, other_collider, None)
 
         result = self._SAT(other_collider)
         if result is None:
             if (self.stay or self.enter) and not collided_a:
-                self.OnCollisionExit(collision)
+                self.OnCollisionExit(collision2)
             if (other_collider.stay or other_collider.enter) and not collided_b:
-                other_collider.OnCollisionExit(collision)  # could creat problems if two objects collide at once
+                other_collider.OnCollisionExit(collision1)  # could creat problems if two objects collide at once
             return None
         a_axes, a_center, a_half, b_axes, b_center, b_half, collision_type, collision_axis_indices, collision_axis = result
 
@@ -520,13 +483,14 @@ class BoxCollider(Collider):
         # if result is None:
         #     return None
         # result, rb = result
-        result, rb = self._find_contaact_points_raycast(other_collider, collision_axis)
+        result = self._find_contaact_points_raycast(other_collider, collision_axis)
 
         collision1 = Collision(self, -collision_axis, None)
         collision2 = Collision(other_collider, -collision_axis, None)
 
         if single_point:
             result = self._average_contact_data(result)
+
         if result is None or result == []:
             return None
 
@@ -548,7 +512,7 @@ class BoxCollider(Collider):
             other_collider.OnCollisionStay(collision1)
 
         # return contact_points, rb
-        return result, rb
+        return result
 
     def attach(self, owner_object):
         box = owner_object.get_component(BoxCollider)  # will remove duplicate renders by default

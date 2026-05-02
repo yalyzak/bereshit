@@ -74,7 +74,9 @@ class Vector3:
         return Vector3(self.x, self.y, self.z)
 
     def __eq__(self, other):
-        return isinstance(other, Vector3) and (self.x, self.y, self.z) == (other.x, other.y, other.z)
+        if not isinstance(other, Vector3):
+            return NotImplemented
+        return (self.x, self.y, self.z) == (other.x, other.y, other.z)
 
     def __hash__(self):
         return hash((self.x, self.y, self.z))

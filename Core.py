@@ -3,7 +3,7 @@ import threading
 import time
 # from builtins import range
 
-from bereshit import Object, render, World,Vector3
+from bereshit import Object, render, World, Vector3, Physics
 
 
 # import old_render as render
@@ -11,7 +11,6 @@ from bereshit import Object, render, World,Vector3
 
 def run(scene,speed=1, gizmos=False, scriptRefreshRate=60,tick=1/60, Render=True, ForceRenderInitialize=True, gravity=Vector3(0,-9.8,0), physics_epochs=10):
     Exit = [False]
-
     if not Render:
         ForceRenderInitialize = False
 
@@ -21,12 +20,14 @@ def run(scene,speed=1, gizmos=False, scriptRefreshRate=60,tick=1/60, Render=True
     if not isinstance(scene, list):
         scene = [scene]
     if gizmos:
-        hit_points = [Object(size=(0.1,0.1,0.1),position=(100,100,100),children=[Object(size=(0.1,0.1,0.1),position=(100,100,100)) for i in range(8)]) for i in range(8)]
+        hit_points = [Object(size=(0.1,0.1,0.1),position=(100,100,100)) for i in range(100)]
         gizmos_container = Object(size=(0,0,0),children=hit_points)
         world = World(Exit, children=scene+[gizmos_container],gizmos=gizmos_container,gravity=gravity,tick=tick,speed=speed, physics_epochs=physics_epochs)
 
     else:
         world = World(Exit, children=scene,gravity=gravity,tick=tick,speed=speed, physics_epochs=physics_epochs)
+
+    Physics.World = world
 
     async def main_logic(Initialize):
         start_wall_time = time.perf_counter()

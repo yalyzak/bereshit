@@ -119,7 +119,8 @@ class BoxCollider(Collider):
         for p in clipped:
             depth = ref_plane_d - ref_normal.dot(p)
             if depth >= 0:
-                contacts.append(p)
+                projected_p = p + ref_normal * depth
+                contacts.append(projected_p)
 
         return ContactPoints(contacts, sat_result["normal"], penetration)
 

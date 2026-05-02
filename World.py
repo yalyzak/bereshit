@@ -9,7 +9,8 @@ from bereshit.Rigidbody import Rigidbody
 from bereshit.Vector3 import Vector3
 from bereshit.ContactPoint import ContactPoint
 from bereshit.ContactPoint import ContactManifold
-from bereshit.class_type import Joint, Collider
+from bereshit.class_type import Joint
+from bereshit.Collider import Collider
 
 logger = logging.getLogger(__name__)
 class World:
@@ -87,18 +88,16 @@ class World:
                 joint.solve(dt)
 
     def solve_collections(self, dt, contacts):
-        for contact_points in contacts:
-            for contact in contact_points:
-                contact_point = contact['contact_point']
-                normal = contact['normal']
-                rb1, rb2 = contact['rb1'], contact['rb2']
-                penetration = contact['penetration']
-                Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=True)
+        for contact in contacts:
+            contact_point = contact['contact_point']
+            normal = contact['normal']
+            rb1, rb2 = contact['rb1'], contact['rb2']
+            penetration = contact['penetration']
+            Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=True)
 
     def solve_collectionsFirstIteration(self, children, dt):
 
         contacts = []
-
         # STEP 1: Collect all contacts (use ALL manifold points)
         for i in range(len(children)):
             first_obj = children[i]
@@ -119,40 +118,22 @@ class World:
                                                         collided_b=collided_b)
                 if result is None:
                     continue
+                contacts2 = []
                 collided_a, collided_b = True, True
-                contact_points, rb = result  # contact_points = [(cp, n, pn), ...]
-                c1, c2 = rb
-                rb1, rb2 = c1.parent.Rigidbody, c2.parent.Rigidbody
-                for _ in range(1):
-                    contacts2 = []
-                    if type(contact_points[0]) == tuple:  # For each point in the manifold, add a separate constraint
-                        for (contact_point, normal, penetration) in contact_points:
-                            contact_point = Vector3(contact_point)
+                rb1, rb2 = first_rb, second_rb
 
-                            Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt,
-                                                    apply_friction=True)
 
-                            contacts2.append({
-                                "rb1": rb1,
-                                "rb2": rb2,
-                                "normal": normal,
-                                "penetration": penetration,
-                                "contact_point": contact_point,
-                            })
-                            contacts.append(contacts2)
+                for contact_point in result.contact_points:
+                    Rigidbody.solve_impulse(rb1, rb2, contact_point, result.normal, result.depth, dt, apply_friction=True)
 
-                    elif type(contact_points[0]) == Vector3:
-                        contact_point, normal, penetration = contact_points
+                    contacts.append({
+                        "rb1": rb1,
+                        "rb2": rb2,
+                        "normal": result.normal,
+                        "penetration": result.depth,
+                        "contact_point": contact_point,
+                    })
 
-                        Rigidbody.solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=True)
-
-                        contacts.append([{
-                            "rb1": rb1,
-                            "rb2": rb2,
-                            "normal": normal,
-                            "penetration": penetration,
-                            "contact_point": contact_point,
-                        }])
 
         if self.gizmos:
             self.set_gizmos(contacts=contacts)  # needs Updating/Fixing
@@ -161,7 +142,11 @@ class World:
 
     def set_gizmos(self, contacts=[]):
         for i, contact_point in enumerate(contacts):
-            self.gizmos.children[i].position = contact_point[i]['contact_point']
+            self.gizmos.children[i].position = contact_point['contact_point']
+
+    def set_gizmos2(self, contacts=[]):
+        for i, contact_point in enumerate(contacts):
+            self.gizmos.children[i].position = contact_point
 
     def Start(self):
         children1 = self.get_all_children()
