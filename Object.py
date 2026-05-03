@@ -65,37 +65,50 @@ class Object:
             world_offset = self.parent.quaternion.rotate(new_local_position)
             self.position = self.parent.position + world_offset
 
+        for child in self.children:
+            child.local_position += new_local_position
+
     def __copy__(self):
         return Object(self.value)
 
     def __deepcopy__(self, memo):
-        obj_copy = type(self)(
-            position=copy.deepcopy(self.position, memo),
-            rotation=copy.deepcopy(self.rotation, memo),
-            size=copy.deepcopy(self.size, memo),
-            children=copy.deepcopy(self.children, memo),
-            components=copy.deepcopy(self.components, memo),
-            name=copy.deepcopy(self.name, memo),
+        cls = type(self)
 
-        )
+        # 1. Create empty shell
+        obj_copy = cls.__new__(cls)
+        obj_copy.parent = None
+        # 2. Register EARLY (prevents recursion & preserves identity)
         memo[id(self)] = obj_copy
 
+        # 3. Copy simple attributes
+        obj_copy.position = copy.deepcopy(self.position, memo)
+        obj_copy.rotation = copy.deepcopy(self.rotation, memo)
+        obj_copy.quaternion = copy.deepcopy(self.quaternion, memo)
+        obj_copy.size = copy.deepcopy(self.size, memo)
+        obj_copy.name = copy.deepcopy(self.name, memo)
         obj_copy.__default_position = copy.deepcopy(self.__default_position, memo)
 
-        # Fix parent for children
+        # 4. Copy children (MANUALLY to control parent)
+        obj_copy.children = []
+        for child in self.children:
+            child_copy = copy.deepcopy(child, memo)
+
+            # Force parent assignment (no hasattr)
+            child_copy.parent = obj_copy
+
+            obj_copy.children.append(child_copy)
+
+        # 5. Copy components (carefully fix back-references)
         obj_copy.components = {}
         for name, comp in self.components.items():
             comp_copy = copy.deepcopy(comp, memo)
+
             if hasattr(comp_copy, 'obj'):
                 comp_copy.obj = obj_copy
-            obj_copy.components[name] = comp_copy
             if hasattr(comp_copy, 'parent'):
                 comp_copy.parent = obj_copy
-        # Fix component references
-        # for comp in obj_copy.components.values():
 
-        #     if hasattr(comp, 'obj'):
-        #         comp.obj = obj_copy
+            obj_copy.components[name] = comp_copy
 
         return obj_copy
 

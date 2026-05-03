@@ -89,13 +89,11 @@ class HingeJoint(Joint):
             a.angular_velocity += Vector3.from_np(
                 IinvA @ np.cross(rA.to_np(), impulse_np)
             )
-            # b.angular_velocity = a.angular_velocity.floor()
 
         if not b.isKinematic:
             b.angular_velocity -= Vector3.from_np(
                 IinvB @ np.cross(rB.to_np(), impulse_np)
             )
-            # b.angular_velocity = a.angular_velocity.floor()
 
     def solve_angular(self, dt):
         a, b = self.rbA, self.rbB
@@ -149,10 +147,8 @@ class HingeJoint(Joint):
         # Apply angular impulse
         if not a.isKinematic:
             a.angular_velocity -= Vector3.from_np(IinvA @ ang_impulse_np)
-            # a.angular_velocity = a.angular_velocity.floor()
         if not b.isKinematic:
             b.angular_velocity += Vector3.from_np(IinvB @ ang_impulse_np)
-            # b.angular_velocity = b.angular_velocity.floor()
 
         # ---------------------------------------------------------------
         #  3) Hinge-axis friction (optional)

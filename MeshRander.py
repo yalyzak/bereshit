@@ -9,14 +9,23 @@ from bereshit.Vector3 import Vector3
 
 class MeshRander:
     def __deepcopy__(self, memo):
-        obj_copy = type(self)(
-            triangles=copy.deepcopy(self.triangles, memo),
-            vertices=copy.deepcopy(self.vertices, memo),
-            edges=copy.deepcopy(self.edges, memo),
-            shape=copy.deepcopy(self.shape, memo),
-            # ctx= moderngl.create_standalone_context()
-        )
+        cls = type(self)
+
+        # 1. Create empty object
+        obj_copy = cls.__new__(cls)
+
+        # 2. Register immediately (CRITICAL)
         memo[id(self)] = obj_copy
+
+        # 3. Now it's safe to deepcopy
+        obj_copy._triangles = copy.deepcopy(self._triangles, memo)
+        obj_copy._vertices = copy.deepcopy(self._vertices, memo)
+        obj_copy._edges = copy.deepcopy(self._edges, memo)
+        obj_copy._uv = copy.deepcopy(self._uv, memo)
+        obj_copy._TextureImage = copy.deepcopy(self._TextureImage, memo)
+
+
+        # obj_copy.shape = copy.deepcopy(self.shape, memo)
 
         return obj_copy
     def vertices(self):
