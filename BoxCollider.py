@@ -367,7 +367,7 @@ class BoxCollider(Collider):
             ray_origin[2] + ray_dir[2] * t_hit,
         )
 
-        return RaycastHit(point=Vector3.from_np(hit_point), collider=self)
+        return RaycastHit(point=Vector3.from_np(hit_point) + self.parent.position, collider=self)
 
     def __ray_obb_intersection(self, ray_origin, ray_dir, box_center, rotation_matrix, half_size):
         """
