@@ -15,11 +15,11 @@ class BoxCollider(Collider):
 
         result = self.__SAT(other_collider)
         if result is None:
-            BoxCollider.exit_flags(self, other_collider, collided_a, collided_b)
+            BoxCollider.handle_collision_exit(self, other_collider, collided_a, collided_b)
             return None
 
         result = BoxCollider.__generate_contacts(result)
-        BoxCollider.collision_flags(self, other_collider, result)
+        BoxCollider.handle_collision_events(self, other_collider, result)
         return result
 
     def Raycast(self, origin, direction, maxDistance=float('inf'), hit=None):  # needs fixing

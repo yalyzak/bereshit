@@ -43,7 +43,7 @@ class Collider:
                 component.OnTriggerEnter(collision)
 
     @staticmethod
-    def exit_flags(self, other_collider, collided_a, collided_b):
+    def handle_collision_exit(self, other_collider, collided_a, collided_b):
         collision1 = Collision(self, None)
         collision2 = Collision(other_collider, None)
         if (self.stay or self.enter) and not collided_a:
@@ -52,7 +52,7 @@ class Collider:
             other_collider.OnCollisionExit(collision1)
 
     @staticmethod
-    def collision_flags(self, other_collider, result):
+    def handle_collision_events(self, other_collider, result):
         collision1 = Collision(self, result)
         collision2 = Collision(other_collider, result)
 
