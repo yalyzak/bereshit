@@ -42,6 +42,33 @@ class Collider:
             if hasattr(component, 'OnTriggerEnter') and component.OnTriggerEnter is not None and component != self:
                 component.OnTriggerEnter(collision)
 
+    @staticmethod
+    def exit_flags(self, other_collider, collided_a, collided_b):
+        collision1 = Collision(self, None)
+        collision2 = Collision(other_collider, None)
+        if (self.stay or self.enter) and not collided_a:
+            self.OnCollisionExit(collision2)
+        if (other_collider.stay or other_collider.enter) and not collided_b:
+            other_collider.OnCollisionExit(collision1)
+
+    @staticmethod
+    def collision_flags(self, other_collider, result):
+        collision1 = Collision(self, result)
+        collision2 = Collision(other_collider, result)
+
+        if self.is_trigger:
+            self.OnTriggerEnter(collision2)
+        if other_collider.is_trigger:
+            other_collider.OnTriggerEnter(collision1)
+        if self.enter == False:
+            self.OnCollisionEnter(collision2)
+        else:
+            self.OnCollisionStay(collision2)
+        if other_collider.enter == False:
+            other_collider.OnCollisionEnter(collision1)
+        else:
+            other_collider.OnCollisionStay(collision1)
+
     def Raycast(self, origin, direction, maxDistance=float('inf'), hit=None):
         print(f"Ray casting was not defined for {self.__class__.__name__}")
         return RaycastHit()
@@ -55,7 +82,6 @@ class ContactPoints:
 
 
 class Collision:
-    def __init__(self, other, normal, contact_point):
-        self.normal = normal
+    def __init__(self, other, contactPoints):
         self.other = other
-        self.contact_point = contact_point
+        self.contactPoints = contactPoints

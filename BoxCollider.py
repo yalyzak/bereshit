@@ -12,17 +12,14 @@ class BoxCollider(Collider):
         other_collider = getattr(other, 'collider', other)
         if other_collider is None:
             return None
-        collision = Collision(self, other_collider, None)
 
         result = self.__SAT(other_collider)
         if result is None:
-            if (self.stay or self.enter) and not collided_a:
-                self.OnCollisionExit(collision)
-            if (other_collider.stay or other_collider.enter) and not collided_b:
-                other_collider.OnCollisionExit(collision)  # could creat problems if two objects collide at once
+            BoxCollider.exit_flags(self, other_collider, collided_a, collided_b)
             return None
 
         result = BoxCollider.__generate_contacts(result)
+        BoxCollider.collision_flags(self, other_collider, result)
         return result
 
     def Raycast(self, origin, direction, maxDistance=float('inf'), hit=None):  # needs fixing
