@@ -86,16 +86,25 @@ class World:
             rb.apply_gravity(self.gravity)
 
     @staticmethod
-    def solve_joints(children, dt):
+    def solve_jointsFirstIteration(children, dt):
         """
         Go through all objects, find joints, and solve their constraints.
         """
+        joints_list = []
         for child in children:
             joints = child.get_all_components(Joint)
+            joints_list += joints
             for joint in joints:
                 joint.solve(dt)
 
-    def solve_collections(self, dt, contacts):
+        return joints_list
+
+    @staticmethod
+    def solve_joints(joints, dt):
+        for joint in joints:
+            joint.solve(dt)
+
+    def solve_collections(self, contacts, dt):
         for contact in contacts:
             contact_point = contact['contact_point']
             normal = contact['normal']
@@ -186,11 +195,11 @@ class World:
         children = self.get_all_children_physics()
         self.apply_gravity(children)  # APPLY GRAVITY and external forces
         contacts = self.solve_collectionsFirstIteration(children, dt)  # handel collisions and friction
-        self.solve_joints(children, dt)
+        joints = self.solve_jointsFirstIteration(children, dt)
 
         for _ in range(self.physics_epochs - 1):  # keeps Constraint inline
-            self.solve_collections(dt, contacts)  # handel collisions and friction
-            self.solve_joints(children, dt)
+            self.solve_collections(contacts, dt)  # handel collisions and friction
+            self.solve_joints(joints, dt)
 
         # self.solve_collectionsLastIteration(dt, contacts)
 
