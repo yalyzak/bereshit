@@ -124,11 +124,27 @@ class Rigidbody:
         k_angular = normal.dot(term1 + term2)
         inv_eff_mass = k_linear + k_angular
 
+        Rigidbody.positional_correction(rb1, rb2, penetration, normal, inv_eff_mass)
+
         J = -(1 + restitution) * v_norm / inv_eff_mass
 
         rb1._resolve_dynamic_collision(rb2, normal, J, r1, r2)
         if apply_friction:
             rb1._apply_friction_impulse(rb2, relative_vel, normal, J, r1, r2)
+
+    @staticmethod
+    def positional_correction(rb1, rb2, penetration, normal, inv_eff_mass):
+        percent = 0.8  # how aggressively to fix (0.2–0.8 is typical)
+        slop = 0.01  # small tolerance to ignore tiny penetrations
+
+        correction_mag = max(penetration - slop, 0) / inv_eff_mass * percent
+        correction = normal * correction_mag
+
+        if not rb1.isKinematic:
+            rb1.parent.position -= correction * rb1.invMass
+
+        if not rb2.isKinematic:
+            rb2.parent.position += correction * rb2.invMass
 
     def _apply_friction_impulse(self, other, relative_vel, normal, J, r1, r2):
         """

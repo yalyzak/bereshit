@@ -126,7 +126,7 @@ class HingeJoint(Joint):
         # Baumgarte angular correction
         q_rel = self.body_a.quaternion.inverse() * self.body_b.quaternion
 
-        # self.clamp_rotation(q_rel, IinvA, IinvB, a, b)
+        self.clamp_rotation(q_rel, IinvA, IinvB, a, b)
 
         q_error = q_rel * self.initial_rel_rot.inverse()
 
@@ -173,7 +173,7 @@ class HingeJoint(Joint):
         clamped_angle = max(self.min_rotation, min(angle, self.max_rotation))
         error = angle - clamped_angle
         if abs(error) > 0.001:
-            correction_speed = error * 0.01  # stiffness (tune this)
+            correction_speed = error * 0.0001  # stiffness (tune this)
 
             impulse = axis_world * (-correction_speed)
 

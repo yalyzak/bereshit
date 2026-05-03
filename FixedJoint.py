@@ -5,7 +5,7 @@ from bereshit.Joint import Joint
 
 class FixedJoint(Joint):
 
-    def __cast_anchor_default(self):
+    def cast_anchor(self):
         self.world_anchor = (self.body_a.position + self.body_b.position) * 0.5
 
     def solve_linear(self, dt):
