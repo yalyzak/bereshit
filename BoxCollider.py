@@ -13,14 +13,19 @@ class BoxCollider(Collider):
         if other_collider is None:
             return None
 
-        result = self.__SAT(other_collider)
-        if result is None:
+        aabb_hit = BoxCollider.aabb_collision(self, other_collider)
+        if not aabb_hit:
             BoxCollider.handle_collision_exit(self, other_collider, collided_a, collided_b)
             return None
 
-        result = BoxCollider.__generate_contacts(result)
-        BoxCollider.handle_collision_events(self, other_collider, result)
-        return result
+        sat_result = self.__SAT(other_collider)
+        if sat_result is None:
+            BoxCollider.handle_collision_exit(self, other_collider, collided_a, collided_b)
+            return None
+
+        contacts = BoxCollider.__generate_contacts(sat_result)
+        BoxCollider.handle_collision_events(self, other_collider, contacts)
+        return contacts
 
     def Raycast(self, origin, direction, maxDistance=float('inf'), hit=None):  # needs fixing
         return self.__ray_obb_intersection(origin, direction, self.parent.position.to_np(),

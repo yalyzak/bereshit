@@ -1,4 +1,7 @@
+import numpy as np
+
 from bereshit.Physics import RaycastHit
+from bereshit.Vector3 import Vector3
 
 
 class Collider:
@@ -12,6 +15,36 @@ class Collider:
         self.is_trigger = is_trigger
         self.enter = False
         self.stay = False
+
+    @staticmethod
+    def aabb_collision(obj1, obj2):
+        min1, max1 = obj1.get_aabb()
+        min2, max2 = obj2.get_aabb()
+
+        # Check overlap on all 3 axes
+        return (
+                (min1.x <= max2.x and max1.x >= min2.x) and
+                (min1.y <= max2.y and max1.y >= min2.y) and
+                (min1.z <= max2.z and max1.z >= min2.z)
+        )
+
+    def get_aabb(self):
+        # Half extents
+        half = self.size.to_np() * 0.5
+
+        rot = self.parent.quaternion.to_matrix3()
+
+        # Take absolute value of rotation matrix
+        abs_rot = np.abs(rot)
+
+        # Compute world extents
+        world_half = Vector3.from_np(abs_rot @ half)
+
+        # AABB min/max
+        min_corner = self.parent.position - world_half
+        max_corner = self.parent.position + world_half
+
+        return min_corner, max_corner
 
     def OnCollisionEnter(self, collision):
 
