@@ -34,7 +34,7 @@ class Joint:
         return "joint"
 
     def cast_anchor(self):
-        hit = Physics.Raycast(self.body_a.position, -(self.body_b.position - self.body_a.position), self.body_a.Collider).point
+        hit = Physics.Raycast(self.body_a.position, (self.body_b.position - self.body_a.position), self.body_b.Collider).point
 
         if hit is not None:
             self.world_anchor = hit
