@@ -124,7 +124,9 @@ class BoxCollider(Collider):
             if depth >= 0:
                 projected_p = p + ref_normal * depth
                 contacts.append(projected_p)
-
+        average = ContactPoints.average_point(contacts)
+        if average:
+            contacts.insert(0, average)
         return ContactPoints(contacts, sat_result["normal"], penetration)
 
     def __SAT(self, other_collider):

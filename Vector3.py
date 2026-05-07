@@ -134,10 +134,7 @@ class Vector3:
         )
 
     def to_np(self):
-        if isinstance(self, Vector3):
-            return np.array([self.x, self.y, self.z], dtype='f4')
-        elif isinstance(self, list):
-            return np.array([np.array([item.x, item.y, item.z], dtype='f4') for item in self])
+        return np.array([self.x, self.y, self.z], dtype='f4')
 
     @classmethod
     def from_np(cls, arr):

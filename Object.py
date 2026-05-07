@@ -9,7 +9,9 @@ from bereshit.MeshRander import MeshRander
 from bereshit.Quaternion import Quaternion
 from bereshit.Vector3 import Vector3
 
+
 class Position(Vector3): pass
+
 
 class LocalPosition(Vector3): pass
 
@@ -19,11 +21,14 @@ class CenterOfGravity(Vector3): pass
 
 class Rotation(Vector3): pass
 
+
 class LocalRotation(Vector3): pass
+
 
 class Size(Vector3):
     def __init__(self, x=1, y=1, z=1):
         super().__init__(x, y, z)
+
 
 class Object:
 
@@ -68,6 +73,17 @@ class Object:
         for child in self.children:
             child.local_position += new_local_position
 
+    def set_default_quaternion(self):
+        self.__default_quaternion = copy.copy(self.quaternion)
+
+    def set_default_position(self):
+        self.__default_position = copy.copy(self.position)
+
+    def set_default(self):
+        self.set_default_quaternion()
+        self.set_default_position()
+
+
     def __copy__(self):
         return Object(self.value)
 
@@ -87,6 +103,7 @@ class Object:
         obj_copy.size = copy.deepcopy(self.size, memo)
         obj_copy.name = copy.deepcopy(self.name, memo)
         obj_copy.__default_position = copy.deepcopy(self.__default_position, memo)
+        obj_copy.__default_quaternion = copy.deepcopy(self.__default_quaternion, memo)
 
         # 4. Copy children (MANUALLY to control parent)
         obj_copy.children = []
@@ -119,14 +136,11 @@ class Object:
 
         for i, child in enumerate(self.children):
             if child.name == new_child.name:
-               raise Exception("fuck you i did not program this yat"
-                               "to solve this name the object with a unique name")
+                raise Exception("fuck you i did not program this yat"
+                                "to solve this name the object with a unique name")
         else:
             self.children.append(new_child)
             # World.Objects.append(new_child)
-
-
-
 
     def _remove_child(self, child):
         if child in self.children:
@@ -168,8 +182,6 @@ class Object:
 
         return self
 
-
-
     def __init__(self, position=None, rotation=None, size=None, quaternion=None, children=None, components=None,
                  name=""):
         self.parent = None
@@ -186,30 +198,20 @@ class Object:
 
         self.__default_position = copy.copy(self.position)
 
-        # self.__default_position = Vector3(0,0,0)
-
         self.rotation = Rotation(*rotation) if isinstance(rotation, tuple) else rotation or Rotation()
 
         self.__default_rotation = copy.copy(self.rotation)
 
+
         self.world = None
 
-        # self.quaternion = self._compute_quaternion()
-
         self.quaternion = Quaternion.euler(self.rotation) if not quaternion else quaternion
-        self._rotation_dirty = False
+
+        self.__default_quaternion = copy.copy(self.quaternion)
+
         self.add_component(Material())
         self.add_component(MeshRander(shape="box"))
 
-        # def findWorld(child):
-        #     parent = child.parent
-        #     if parent is None:
-        #         return child
-        #
-        #     return findWorld(parent)
-        #
-        # for child in self.get_all_children():
-        #     child.world = findWorld(child)
 
     def search(self, target_name):
         if hasattr(self, 'name') and self.name == target_name:
@@ -222,27 +224,32 @@ class Object:
         return None
 
     def search_by_component(self, component_name):
-        # Check if this object has the desired component
+        results = []
+
+        # Check current object
         if hasattr(self, "components") and component_name in self.components:
-            return self
+            results.append(self)
+
         # Recursively check children
         if hasattr(self, "children"):
             for child in self.children:
-                result = child.search_by_component(component_name)
-                if result:
-                    return result
-        return None
+                results.extend(child.search_by_component(component_name))
+
+        return results
 
     def search_by_name(self, object_name):
-        # Check if this object has the desired component
+        results = []
+
+        # Check current object
         if self.name == object_name:
-            return self
+            results.append(self)
+
         # Recursively check children
         for child in self.children:
-            result = child.search_by_name(object_name)
-            if result:
-                return result
-        return None
+            results.extend(child.search_by_name(object_name))
+
+        return results
+
     def remove_component(self, name):
         if name in self.components:
             del self.components[name]
@@ -256,6 +263,7 @@ class Object:
                 if isinstance(c, name):
                     return c
         return None
+
     def get_all_components(self, name):
         components = []
         if isinstance(name, str):
@@ -276,8 +284,6 @@ class Object:
         if component is not None:
             return component
         raise AttributeError(f"'{self.name}' object has no attribute or component '{name}'")
-
-
 
     def rotate_around_axis(self, axis, angle_rad):
         """
@@ -300,21 +306,6 @@ class Object:
             self.rotation_matrix = np.eye(3)
 
         self.rotation_matrix = R @ self.rotation_matrix
-
-    def get_all_colliders(self):
-        all_bereshit = []
-        collider = self.get_component("Collider")
-        if collider:
-            all_bereshit.append(self)
-        for child in self.get_all_children():
-            all_bereshit.extend(child.get_all_colliders())
-        return all_bereshit
-
-
-
-
-
-
 
     def set_rotation(self, new_world_rot: Vector3):
         """
@@ -350,6 +341,7 @@ class Object:
     def set_projection(self, delta, position):
         self.position = delta.rotate(self.position - position) + position
         self.quaternion *= delta
+
     @property
     def default_position(self):
         return self.__default_position
@@ -364,13 +356,19 @@ class Object:
             child.set_default_position()
 
     def get_default_position(self):
-        return self.__default_position
+        return copy.copy(self.__default_position)
+
+    def get_default_quaternion(self):
+        return copy.copy(self.__default_quaternion)
 
     def reset_to_default(self):
-        self.position = copy.copy(self.__default_position)
+        self.position = self.get_default_position()
+        self.quaternion = self.get_default_quaternion()
         if self.get_component("Rigidbody") is not None:
             self.Rigidbody.acceleration = Vector3(0, 0, 0)
             self.Rigidbody.velocity = Vector3(0, 0, 0)
+            self.Rigidbody.angular_velocity = Vector3(0, 0, 0)
+            self.Rigidbody.angular_acceleration = Vector3(0, 0, 0)
 
         for child in self.children:
             child.reset_to_default()

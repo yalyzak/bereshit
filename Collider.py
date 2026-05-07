@@ -113,6 +113,20 @@ class ContactPoints:
         self.normal = normal
         self.depth = depth
 
+    @staticmethod
+    def average_point(contact_points):
+        count = len(contact_points)
+        if count:
+            total_p = Vector3(0, 0, 0)
+
+            for point in contact_points:
+                total_p += point
+
+            avg_p = total_p / count
+
+            return avg_p
+        return None
+
 
 class Collision:
     def __init__(self, other, contactPoints):

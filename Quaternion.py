@@ -334,3 +334,6 @@ class Quaternion:
             z = 0.25 * s
 
         return Quaternion(x, y, z, w).normalized()
+
+    def to_np(self):
+        return np.array([self.x, self.y, self.z, self.w], dtype='f4')
