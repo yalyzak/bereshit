@@ -4,7 +4,7 @@ import numpy as np
 
 import bereshit
 from bereshit import Quaternion,Vector3, MeshRander
-import  mouse
+import mouse
 
 CENTER_X = 960
 CENTER_Y = 540
