@@ -16,7 +16,9 @@ class World:
     def __init__(self, running_flag, children=None, gizmos=False, gravity=Vector3(0, -9.8, 0), tick=None, speed=None, physics_epochs=1, scale=1):
         self.RunningFlag = running_flag
         self.children = children or []
-        self.Camera = self.search_by_component('Camera')[0]
+        cameras = self.search_by_component('Camera')
+        if len(cameras) > 0:
+            self.Camera = cameras[0]
         self.gizmos = gizmos
         self.manifold_cache = {}
         self.gravity = gravity
@@ -49,7 +51,7 @@ class World:
                 result = child.search_by_component(component_name)
                 if result:
                     return result
-        return None
+        return []
 
     def search_by_name(self, object_name):
         for child in self.children:

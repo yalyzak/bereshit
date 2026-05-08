@@ -77,8 +77,10 @@ class BereshitRenderer(moderngl_window.WindowConfig):
         super().__init__(**kwargs)
         self.wnd.exit_key = None
         self.width, self.height = self.wnd.size
-        self.root_object = BereshitRenderer.root_object  # 👈 assign it here
-        self.camera_obj = self.root_object.search_by_component('Camera')[0]
+        self.root_object = BereshitRenderer.root_object
+        cameras = self.root_object.search_by_component('Camera')
+        if len(cameras) > 0:
+            self.camera_obj = cameras[0]
 
         if not self.camera_obj:
             raise Exception("No camera object found")
