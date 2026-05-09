@@ -42,14 +42,14 @@ class BoxCollider(Collider):
         B = sat_result["B"]
 
         # World data
-        a_center = A.obj.position
-        b_center = B.obj.position
+        a_center = A.position
+        b_center = B.position
 
-        a_axes = A.__get_axes(A.obj.quaternion)
-        b_axes = B.__get_axes(B.obj.quaternion)
+        a_axes = A.__get_axes(A.quaternion)
+        b_axes = B.__get_axes(B.quaternion)
 
-        a_half = A.obj.size * 0.5
-        b_half = B.obj.size * 0.5
+        a_half = A.size * 0.5
+        b_half = B.size * 0.5
 
         # ---------------------------
         # EDGE–EDGE CASE
@@ -80,13 +80,13 @@ class BoxCollider(Collider):
             flip = True
             normal = -normal  # ensure normal points A → B
 
-        ref_center = ref.obj.position
-        ref_axes = ref.__get_axes(ref.obj.quaternion.conjugate())
-        ref_half = ref.obj.size * 0.5
+        ref_center = ref.position
+        ref_axes = ref.__get_axes(ref.quaternion.conjugate())
+        ref_half = ref.size * 0.5
 
-        inc_center = inc.obj.position
-        inc_axes = inc.__get_axes(inc.obj.quaternion.conjugate())
-        inc_half = inc.obj.size * 0.5
+        inc_center = inc.position
+        inc_axes = inc.__get_axes(inc.quaternion.conjugate())
+        inc_half = inc.size * 0.5
 
         # Reference face
         ref_normal = ref_axes[ref_axis_index]
@@ -130,14 +130,14 @@ class BoxCollider(Collider):
         return ContactPoints(contacts, sat_result["normal"], penetration)
 
     def __SAT(self, other_collider):
-        a_center = self.obj.position
-        b_center = other_collider.obj.position
+        a_center = self.position
+        b_center = other_collider.position
 
-        a_axes = BoxCollider.__get_axes(self.obj.quaternion)
-        b_axes = BoxCollider.__get_axes(other_collider.obj.quaternion.conjugate())
+        a_axes = BoxCollider.__get_axes(self.quaternion)
+        b_axes = BoxCollider.__get_axes(other_collider.quaternion.conjugate())
 
-        a_half = self.obj.size * 0.5
-        b_half = other_collider.obj.size * 0.5
+        a_half = self.size * 0.5
+        b_half = other_collider.size * 0.5
 
         a_half_sizes = [a_half.x, a_half.y, a_half.z]
         b_half_sizes = [b_half.x, b_half.y, b_half.z]
@@ -404,12 +404,6 @@ class BoxCollider(Collider):
         box = owner_object.get_component(BoxCollider)  # will remove duplicate renders by default
         if box:
             owner_object.remove_component("Collider")
-
-        if self.size == None:
-            self.size = owner_object.size
-
-        if self.rotation == None:
-            self.rotation = owner_object.rotation
 
         self.obj = owner_object
         return "Collider"  # need to be change to "Collider" but fucks up the whole update loop

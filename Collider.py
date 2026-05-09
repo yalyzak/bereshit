@@ -2,19 +2,32 @@ import numpy as np
 
 from bereshit.Physics import RaycastHit
 from bereshit.Vector3 import Vector3
-
+from bereshit.Quaternion import Quaternion
 
 class Collider:
     Scale = 1
 
-    def __init__(self, size=None, rotation=None, object_pointer=None, is_trigger=False):
-        self.size = size
-        self.rotation = rotation
+    def __init__(self, size=None, position=None, rotation=Vector3(), object_pointer=None, is_trigger=False):
+        self.__delta_size = Vector3() if not size else size
+        self.__delta_position = Vector3() if not position else position
+        self.__delta_quaternion = Quaternion.euler(rotation)
 
         self.obj = object_pointer
         self.is_trigger = is_trigger
         self.enter = False
         self.stay = False
+
+    @property
+    def size(self):
+        return self.__delta_size + self.parent.size
+
+    @property
+    def position(self):
+        return self.__delta_position + self.parent.position
+
+    @property
+    def quaternion(self):
+        return self.__delta_quaternion * self.parent.quaternion
 
     @staticmethod
     def aabb_collision(obj1, obj2):
@@ -32,7 +45,7 @@ class Collider:
         # Half extents
         half = self.size.to_np() * 0.5
 
-        rot = self.parent.quaternion.to_matrix3()
+        rot = self.quaternion.to_matrix3()
 
         # Take absolute value of rotation matrix
         abs_rot = np.abs(rot)
@@ -41,8 +54,8 @@ class Collider:
         world_half = Vector3.from_np(abs_rot @ half)
 
         # AABB min/max
-        min_corner = self.parent.position - world_half
-        max_corner = self.parent.position + world_half
+        min_corner = self.position - world_half
+        max_corner = self.position + world_half
 
         return min_corner, max_corner
 
