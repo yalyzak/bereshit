@@ -34,7 +34,8 @@ import moderngl_window
 import moderngl
 from pyrr import Vector4, Vector3 as PyrrVector3, Quaternion as PyrrQuat, Matrix44
 import numpy as np
-
+import moderngl_window.context.glfw
+import bereshit.shaders
 
 
 class BereshitRenderer(moderngl_window.WindowConfig):
