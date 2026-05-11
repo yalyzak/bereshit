@@ -6,6 +6,7 @@ from bereshit.Vector3 import Vector3
 
 
 class Rigidbody:
+
     _friction_table = {
         ("Steel", "Concrete"): 0.6,
         ("Rubber", "Concrete"): 0.9,
@@ -64,7 +65,9 @@ class Rigidbody:
         if rb1 and not rb1.isKinematic:
             rb1.velocity -= impulse_vec / rb1.mass
             torque_impulse = r1.cross(impulse_vec)
-            ang_impulse = Vector3.from_np(rb1.Iinv_world() @ torque_impulse.to_np())
+            local_torque_impulse = rb1.parent.quaternion.conjugate().rotate(torque_impulse)
+            local_delta_w = local_torque_impulse * rb1.inv_inertia
+            ang_impulse = rb1.parent.quaternion.rotate(local_delta_w)
             if rb1.Freeze_Rotation.x == 0:
                 rb1.angular_velocity.x += ang_impulse.x
             if rb1.Freeze_Rotation.y == 0:
@@ -74,7 +77,9 @@ class Rigidbody:
         if rb2 and not rb2.isKinematic:
             rb2.velocity += impulse_vec / rb2.mass
             torque_impulse = r2.cross(impulse_vec)
-            ang_impulse = Vector3.from_np(rb2.Iinv_world() @ torque_impulse.to_np())
+            local_torque_impulse = rb2.parent.quaternion.conjugate().rotate(torque_impulse)
+            local_delta_w = local_torque_impulse * rb2.inv_inertia
+            ang_impulse = rb2.parent.quaternion.rotate(local_delta_w)
             if rb2.Freeze_Rotation.x == 0:
                 rb2.angular_velocity.x -= ang_impulse.x
             if rb2.Freeze_Rotation.y == 0:
@@ -322,6 +327,9 @@ class Rigidbody:
                 (1 / 12) * self.mass * (hx ** 2 + hz ** 2),
                 (1 / 12) * self.mass * (hy ** 2 + hx ** 2)
             )
+
+            self.inv_inertia = self.inertia.inverse()
+
             self.inertia_tensor = np.array([
                 [self.inertia.x, 0.0, 0.0],
                 [0.0, self.inertia.y, 0.0],
@@ -380,7 +388,6 @@ class Rigidbody:
         ])
         self.parent = owner_object
         self._update_inertia_world()
-
 
 
     def _update_inertia_world(self):

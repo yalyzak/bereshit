@@ -408,6 +408,18 @@ class Object:
             all_objs.extend(child.get_all_children_physics())
         return all_objs
 
+    def findTheCenterOfMass(self):
+        objs = self.get_all_children_physics()
+        if self.get_component("Rigidbody"):
+            objs.append(self)
+        total_mass = 0
+        weighted_sum = Vector3(0, 0, 0)
+        for obj in objs:
+            weighted_sum += obj.position * obj.Rigidbody.mass
+            total_mass += obj.Rigidbody.mass
+
+        return weighted_sum / total_mass
+
     def __repr__(self):
         children_repr = ",\n    ".join(repr(child) for child in self.children)
         return (f"{self.name}(\n"

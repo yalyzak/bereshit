@@ -75,7 +75,7 @@ class HingeJoint(Joint):
         )
 
         # Solve  K * impulse = -(dv + bias)
-        impulse_np = -np.linalg.solve(K, (dv + bias).to_np())
+        impulse_np = -Joint.solve3x3(K, (dv + bias).to_np())
         impulse = Vector3.from_np(impulse_np)
 
         # Apply linear impulse
@@ -139,7 +139,7 @@ class HingeJoint(Joint):
         bias = J @ ang_error.to_np() * (self.beta / dt)  # (2,)
 
         # Solve for the 2D impulse
-        ang_impulse_2d = -np.linalg.solve(K_ang, vel_error + bias)  # (2,)
+        ang_impulse_2d = -Joint.solve2x2(K_ang, vel_error + bias)  # (2,)
 
         # Expand back to 3D: impulse = t1 * lambda1 + t2 * lambda2
         ang_impulse_np = J.T @ ang_impulse_2d  # (3,)

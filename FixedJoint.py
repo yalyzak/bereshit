@@ -46,7 +46,7 @@ class FixedJoint(Joint):
         )
 
         # Solve  K * impulse = -(dv + bias)
-        impulse_np = -np.linalg.solve(K, (dv + bias).to_np())
+        impulse_np = -Joint.solve3x3(K, (dv + bias).to_np())
         impulse = Vector3.from_np(impulse_np)
 
         # Apply linear impulse
@@ -88,7 +88,7 @@ class FixedJoint(Joint):
 
         K = IA + IB
 
-        impulse = -np.linalg.solve(K, (rel_w + bias).to_np())
+        impulse = -Joint.solve3x3(K, (rel_w + bias).to_np())
         if not self.rbA.isKinematic:
             self.rbA.angular_velocity -= Vector3.from_np(IA @ impulse)
         self.rbB.angular_velocity += Vector3.from_np(IB @ impulse)

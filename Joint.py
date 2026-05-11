@@ -1,7 +1,9 @@
+import numpy as np
+
 from bereshit.Vector3 import Vector3
 from bereshit.Physics import Physics
 import warnings
-
+from numba import njit
 
 class Joint:
     def __init__(self, body_b, anchor=None, beta=0.2):
@@ -68,3 +70,97 @@ class Joint:
             UserWarning,
             stacklevel=2
         )
+
+    @staticmethod
+    @njit
+    def solve3x3(K, b):
+        """
+        Solve Kx = b for a 3x3 matrix using Cramer's rule.
+
+        Parameters
+        ----------
+        K : (3,3) ndarray
+        b : (3,) ndarray
+
+        Returns
+        -------
+        x : (3,) ndarray
+        """
+
+        a = K[0, 0]
+        b1 = K[0, 1]
+        c = K[0, 2]
+
+        d = K[1, 0]
+        e = K[1, 1]
+        f = K[1, 2]
+
+        g = K[2, 0]
+        h = K[2, 1]
+        i = K[2, 2]
+
+        # determinant
+        det = (
+                a * (e * i - f * h)
+                - b1 * (d * i - f * g)
+                + c * (d * h - e * g)
+        )
+
+        if abs(det) < 1e-12:
+            raise ValueError("Singular matrix")
+
+        inv_det = 1.0 / det
+
+        # inverse matrix entries
+        m00 = (e * i - f * h) * inv_det
+        m01 = (c * h - b1 * i) * inv_det
+        m02 = (b1 * f - c * e) * inv_det
+
+        m10 = (f * g - d * i) * inv_det
+        m11 = (a * i - c * g) * inv_det
+        m12 = (c * d - a * f) * inv_det
+
+        m20 = (d * h - e * g) * inv_det
+        m21 = (b1 * g - a * h) * inv_det
+        m22 = (a * e - b1 * d) * inv_det
+
+        x0 = m00 * b[0] + m01 * b[1] + m02 * b[2]
+        x1 = m10 * b[0] + m11 * b[1] + m12 * b[2]
+        x2 = m20 * b[0] + m21 * b[1] + m22 * b[2]
+
+        return np.array([x0, x1, x2])
+
+    @staticmethod
+    @njit
+    def solve2x2(K, b):
+        """
+        Solve Kx = b for a 2x2 matrix.
+
+        Parameters
+        ----------
+        K : (2,2) ndarray
+        b : (2,) ndarray
+
+        Returns
+        -------
+        x : (2,) ndarray
+        """
+
+        a = K[0, 0]
+        c = K[0, 1]
+
+        d = K[1, 0]
+        e = K[1, 1]
+
+        det = a * e - c * d
+
+        if abs(det) < 1e-12:
+            raise ValueError("Singular matrix")
+
+        inv_det = 1.0 / det
+
+        # inverse(K) * b
+        x0 = (e * b[0] - c * b[1]) * inv_det
+        x1 = (-d * b[0] + a * b[1]) * inv_det
+
+        return np.array([x0, x1])

@@ -179,20 +179,36 @@ class World:
                         traceback.print_exc()
                         exit()
 
+    @staticmethod
+    def CallChildrenUpdate(children, dt):
+        for child in children:
+            for component in child.components.values():
+                if hasattr(component, 'Update') and component.Update is not None and component.Active == True:
+                    try:
+                        component.Update(dt)
+                    except Exception as e:
+                        print(f"[Error] Exception in {component.__class__.__name__}.Update(): {e}")
+                        traceback.print_exc()
+
+    @staticmethod
+    def CallChildrenPhysicsUpdate(children, dt):
+        for child in children:
+            for component in child.components.values():
+                if hasattr(component, 'PhysicsUpdate') and component.PhysicsUpdate is not None and component.Active == True:
+                    try:
+                        component.PhysicsUpdate(dt)
+                    except Exception as e:
+                        print(f"[Error] Exception in {component.__class__.__name__}.PhysicsUpdate(): {e}")
+                        traceback.print_exc()
+
     def update(self, check=True, gizmos=False):
         dt = self.tick
         FirstIteration = True
         allchildren = self.get_all_children()
 
         if check:
-            for child in allchildren:
-                for component in child.components.values():
-                    if hasattr(component, 'Update') and component.Update is not None and component.Active == True:
-                        try:
-                            component.Update(dt)
-                        except Exception as e:
-                            print(f"[Error] Exception in {component.__class__.__name__}.Update(): {e}")
-                            traceback.print_exc()
+            World.CallChildrenUpdate(allchildren, dt)
+        World.CallChildrenPhysicsUpdate(allchildren, dt)
 
         children = self.get_all_children_physics()
         self.apply_gravity(children)  # APPLY GRAVITY and external forces
@@ -202,8 +218,6 @@ class World:
         for _ in range(self.physics_epochs - 1):  # keeps Constraint inline
             self.solve_collections(contacts, dt)  # handel collisions and friction
             self.solve_joints(joints, dt)
-
-        # self.solve_collectionsLastIteration(dt, contacts)
 
         for child in children:
             rb = child.get_component("Rigidbody")
