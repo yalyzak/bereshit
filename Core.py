@@ -9,10 +9,11 @@ from bereshit import Object, render, World, Vector3, Physics
 # import old_render as render
 
 
-def run(scene,speed=1, gizmos=False, scriptRefreshRate=60,tick=1/60, Render=True, ForceRenderInitialize=True, gravity=Vector3(0,-9.8,0), physics_epochs=10, scale=1):
+def run(scene,speed=1, gizmos=False, scriptRefreshRate=60,tick=1/60, Render=True, ForceRenderInitialize=True, gravity=Vector3(0,-9.8,0), physics_epochs=10, scale=1, MaxTime=None):
     Exit = [False]
     if not Render:
         ForceRenderInitialize = False
+
 
     TARGET_FPS = 60
     # bereshit.dt = TARGET_FPS * 0.000165
@@ -27,9 +28,10 @@ def run(scene,speed=1, gizmos=False, scriptRefreshRate=60,tick=1/60, Render=True
     else:
         world = World(Exit, children=scene,gravity=gravity,tick=tick,speed=speed, physics_epochs=physics_epochs, scale=scale)
 
-    async def main_logic(Initialize):
+    async def main_logic(Initialize, MaxTime=None):
         start_wall_time = time.perf_counter()
         steps = 0
+        startedTime = time.perf_counter()
         # speed = 1  # real time slip
         # bereshit.dt = (10 / ((1 / dt) / 60) * speed)
         while not Initialize[0]:
@@ -38,6 +40,13 @@ def run(scene,speed=1, gizmos=False, scriptRefreshRate=60,tick=1/60, Render=True
         while not Exit[0]:
             steps += 1
             simulated_time = steps * world.tick
+
+            if MaxTime is not None and simulated_time >= MaxTime:
+                print(f"Stopping simulation: reached MaxTime ({MaxTime})")
+                print(f"simulated time escaped: {simulated_time}")
+                print(f"real time escaped: {time.perf_counter() - startedTime}")
+                world.Exit()
+                exit()
 
             if steps % scriptRefreshRate == 0:
                 world.update(check=True,gizmos=gizmos)
@@ -56,22 +65,22 @@ def run(scene,speed=1, gizmos=False, scriptRefreshRate=60,tick=1/60, Render=True
         if Exit[0]:
             exit()
 
-    def start_async_loop(Initialize=[True]):
-        asyncio.run(main_logic(Initialize))
+    def start_async_loop(Initialize=[True], MaxTime=None):
+        asyncio.run(main_logic(Initialize, MaxTime))
 
     if Render:
         if ForceRenderInitialize:
             Initialize = [False]
 
-            logic_thread = threading.Thread(target=start_async_loop, daemon=True,args=([Initialize]))
+            logic_thread = threading.Thread(target=start_async_loop, daemon=True, args=([Initialize], MaxTime))
             logic_thread.start()
             # Start rendering in main thread
             render.run_renderer(world,Initialize, Exit)
         else:
-            logic_thread = threading.Thread(target=start_async_loop, daemon=True)
+            logic_thread = threading.Thread(target=start_async_loop, daemon=True, args=(MaxTime))
             logic_thread.start()
 
             # Start rendering in main thread
             render.run_renderer(world)
     else:
-        start_async_loop()
+        start_async_loop(MaxTime=MaxTime)

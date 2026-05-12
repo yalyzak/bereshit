@@ -7,24 +7,21 @@ from bereshit.Collider import Collider, ContactPoints, Collision
 
 
 class BoxCollider(Collider):
-    def check_collision(self, other, single_point=False, collided_a=True, collided_b=True):
 
-        other_collider = getattr(other, 'collider', other)
-        if other_collider is None:
-            return None
-
-        aabb_hit = BoxCollider.aabb_collision(self, other_collider)
+    @staticmethod
+    def check_collision(collider1, collider2, single_point=False, collided_a=True, collided_b=True):
+        aabb_hit = BoxCollider.aabb_collision(collider1, collider2)
         if not aabb_hit:
-            BoxCollider.handle_collision_exit(self, other_collider, collided_a, collided_b)
+            BoxCollider.handle_collision_exit(collider1, collider2, collided_a, collided_b)
             return None
 
-        sat_result = self.__SAT(other_collider)
+        sat_result = collider1.__SAT(collider2)
         if sat_result is None:
-            BoxCollider.handle_collision_exit(self, other_collider, collided_a, collided_b)
+            BoxCollider.handle_collision_exit(collider1, collider2, collided_a, collided_b)
             return None
 
         contacts = BoxCollider.__generate_contacts(sat_result)
-        BoxCollider.handle_collision_events(self, other_collider, contacts)
+        BoxCollider.handle_collision_events(collider1, collider2, contacts)
         return contacts
 
     def Raycast(self, origin, direction, maxDistance=float('inf'), hit=None):  # needs fixing
@@ -109,7 +106,8 @@ class BoxCollider(Collider):
             # Ensure it points inward
             to_center = ref_center - p1
             if plane_normal.dot(to_center) < 0:
-                plane_normal = -plane_normal
+                plane_normal.NegativeSelf()
+
             clipped = BoxCollider.__clip_polygon(clipped, p1, -plane_normal)
 
             if not clipped:
@@ -223,7 +221,7 @@ class BoxCollider(Collider):
         # Incident face normal should point opposite collision normal
         face_normal = axes[best_index]
         if face_normal.dot(collision_normal) > 0:
-            face_normal = -face_normal
+            face_normal.NegativeSelf()
 
         return BoxCollider.__get_face_vertices(
             center,

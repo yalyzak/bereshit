@@ -133,7 +133,7 @@ class World:
                 if (first_rb is None or first_rb.isKinematic) and (second_rb is None or second_rb.isKinematic):
                     continue
 
-                result = first_collider.check_collision(second_collider, single_point=False, collided_a=collided_a,
+                result = first_collider.__class__.check_collision(first_collider, second_collider, single_point=False, collided_a=collided_a,
                                                         collided_b=collided_b)
                 if result is None:
                     continue

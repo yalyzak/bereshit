@@ -30,6 +30,10 @@ class Collider:
         return self.__delta_quaternion * self.parent.quaternion
 
     @staticmethod
+    def check_collision(collider1, collider2, single_point=False, collided_a=True, collided_b=True):
+        pass
+
+    @staticmethod
     def aabb_collision(obj1, obj2):
         min1, max1 = obj1.get_aabb()
         min2, max2 = obj2.get_aabb()

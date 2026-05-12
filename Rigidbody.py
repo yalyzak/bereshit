@@ -4,9 +4,7 @@ from bereshit import Quaternion, World
 from bereshit.Vector3 import Vector3
 
 
-
 class Rigidbody:
-
     _friction_table = {
         ("Steel", "Concrete"): 0.6,
         ("Rubber", "Concrete"): 0.9,
@@ -20,9 +18,11 @@ class Rigidbody:
     }
     _default_friction = 0.6
     Scale = 1
+
     def __init__(self, obj=None, mass=1.0, size=Vector3(1, 1, 1), position=Vector3(0, 0, 0),
                  center_of_mass=Vector3(0, 0, 0), velocity=None, angular_velocity=None, force=None,
-                 isKinematic=False, useGravity=True, drag=0.98, friction_coefficient=0.6, restitution=0.6,COM=None, Freeze_Rotation=None):
+                 isKinematic=False, useGravity=True, drag=0.98, friction_coefficient=0.6, restitution=0.6, COM=None,
+                 Freeze_Rotation=None):
         self.mass = mass
         self.invMass = 0.0 if isKinematic else 1 / mass
         self.material = ""
@@ -53,54 +53,25 @@ class Rigidbody:
         if self.useGravity:
             self.force += Gravity * self.mass
 
-    def _resolve_dynamic_collision(self, other, normal, J, r1, r2):
-        """
-        Applies linear and angular impulse to both dynamic bodies, factoring restitution.
-        """
-        rb1 = self
-        rb2 = other
-
-        impulse_vec = normal * J
-
-        if rb1 and not rb1.isKinematic:
-            rb1.velocity -= impulse_vec / rb1.mass
-            torque_impulse = r1.cross(impulse_vec)
-            local_torque_impulse = rb1.parent.quaternion.conjugate().rotate(torque_impulse)
-            local_delta_w = local_torque_impulse * rb1.inv_inertia
-            ang_impulse = rb1.parent.quaternion.rotate(local_delta_w)
-            if rb1.Freeze_Rotation.x == 0:
-                rb1.angular_velocity.x += ang_impulse.x
-            if rb1.Freeze_Rotation.y == 0:
-                rb1.angular_velocity.y += ang_impulse.y
-            if rb1.Freeze_Rotation.z == 0:
-                rb1.angular_velocity.z += ang_impulse.z
-        if rb2 and not rb2.isKinematic:
-            rb2.velocity += impulse_vec / rb2.mass
-            torque_impulse = r2.cross(impulse_vec)
-            local_torque_impulse = rb2.parent.quaternion.conjugate().rotate(torque_impulse)
-            local_delta_w = local_torque_impulse * rb2.inv_inertia
-            ang_impulse = rb2.parent.quaternion.rotate(local_delta_w)
-            if rb2.Freeze_Rotation.x == 0:
-                rb2.angular_velocity.x -= ang_impulse.x
-            if rb2.Freeze_Rotation.y == 0:
-                rb2.angular_velocity.y -= ang_impulse.y
-            if rb2.Freeze_Rotation.z == 0:
-                rb2.angular_velocity.z -= ang_impulse.z
-
-
-
     @staticmethod
-    def solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction= False):
-
+    def solve_impulse(rb1, rb2, contact_point, normal, penetration, dt, apply_friction=False):
         if not rb1.isKinematic:
-            rb1.velocity += (rb1.force / rb1.mass) * dt
-            rb1.force = Vector3()
+            rb1.velocity += (rb1.force * rb1.invMass) * dt
+            rb1.force.Zero()
         if not rb2.isKinematic:
-            rb2.velocity += (rb2.force / rb2.mass) * dt
-            rb2.force = Vector3()
+            rb2.velocity += (rb2.force * rb2.invMass) * dt
+            rb2.force.Zero()
 
         r1 = contact_point - rb1.parent.position
         r2 = contact_point - rb2.parent.position
+
+        v1_at_p = rb1.velocity - rb1.angular_velocity.cross(r1)
+        v2_at_p = rb2.velocity - rb2.angular_velocity.cross(r2)
+        relative_vel = v2_at_p - v1_at_p
+        v_norm = relative_vel.dot(normal)
+
+        if v_norm >= 0:
+            return 0
 
         rn1 = r1.cross(normal)
         rn2 = r2.cross(normal)
@@ -115,17 +86,9 @@ class Rigidbody:
         else:
             term2 = Vector3(0, 0, 0)
 
-        v1_at_p = rb1.velocity + rb1.angular_velocity.cross(-r1)
-        v2_at_p = rb2.velocity + rb2.angular_velocity.cross(-r2)
-        relative_vel = v2_at_p - v1_at_p
-        v_norm = relative_vel.dot(normal)
-
-        if v_norm >= 0:
-            return 0
-
         restitution = rb1._get_restitution(rb2, v_norm)
 
-        k_linear = (0 if rb1.isKinematic else 1 / rb1.mass) + (0 if rb2.isKinematic else 1 / rb2.mass)
+        k_linear = (0 if rb1.isKinematic else rb1.invMass) + (0 if rb2.isKinematic else rb2.invMass)
         k_angular = normal.dot(term1 + term2)
         inv_eff_mass = k_linear + k_angular
 
@@ -133,7 +96,8 @@ class Rigidbody:
 
         J = -(1 + restitution) * v_norm / inv_eff_mass
 
-        rb1._resolve_dynamic_collision(rb2, normal, J, r1, r2)
+        Rigidbody.__apply_impulse_pair(rb1, rb2, normal, J, r1, r2)
+
         if apply_friction:
             rb1._apply_friction_impulse(rb2, relative_vel, normal, J, r1, r2)
 
@@ -204,37 +168,20 @@ class Rigidbody:
         max_friction = mu * J
         Jt_magnitude = max(-max_friction, min(Jt_magnitude, max_friction))
 
-        Jt = tangent * Jt_magnitude
+        Rigidbody.__apply_impulse_pair(self, other, tangent, Jt_magnitude, r1, r2)
 
-        self._apply_impulse_pair(other, Jt, r1, r2)
-
-    def _apply_impulse_pair(self, other, impulse_vec, r1, r2):
-        rb1 = self
-        rb2 = other
+    @staticmethod
+    def __apply_impulse_pair(rb1, rb2, normal, J, r1, r2):
+        impulse_vec = normal * J
+        negative_impulse = -impulse_vec
 
         if rb1 and not rb1.isKinematic:
-            rb1.velocity += -impulse_vec / rb1.mass
-            torque1 = r1.cross(-impulse_vec)
-            ang1 = -Vector3.from_np(rb1.Iinv_world() @ torque1.to_np())
-
-            if rb1.Freeze_Rotation.x == 0:
-                rb1.angular_velocity.x += ang1.x
-            if rb1.Freeze_Rotation.y == 0:
-                rb1.angular_velocity.y += ang1.y
-            if rb1.Freeze_Rotation.z == 0:
-                rb1.angular_velocity.z += ang1.z
+            rb1.velocity += negative_impulse * rb1.invMass
+            rb1.applyTorqueImpulse(impulse_vec, r1)
 
         if rb2 and not rb2.isKinematic:
-            rb2.velocity += impulse_vec / rb2.mass
-            torque2 = r2.cross(impulse_vec)
-            ang2 = -Vector3.from_np(rb2.Iinv_world() @ torque2.to_np())
-
-            if rb2.Freeze_Rotation.x == 0:
-                rb2.angular_velocity.x += ang2.x
-            if rb2.Freeze_Rotation.y == 0:
-                rb2.angular_velocity.y += ang2.y
-            if rb2.Freeze_Rotation.z == 0:
-                rb2.angular_velocity.z += ang2.z
+            rb2.velocity += impulse_vec * rb2.invMass
+            rb2.applyTorqueImpulse(negative_impulse, r2)
 
     def integrat(self, dt):
         # === 4) INTEGRATION PHASE ===
@@ -264,9 +211,8 @@ class Rigidbody:
         self.parent.quaternion = self.parent.quaternion * Quaternion.euler_radians(ang_disp)  # this line was
         # originally mistakenly used local rotation, the fix may cause extreme instability in physics
 
-
         self.parent.position += self.velocity * dt \
-                         + 0.5 * self.acceleration * dt * dt
+                                + 0.5 * self.acceleration * dt * dt
 
         self.velocity += self.acceleration * dt
 
@@ -277,7 +223,8 @@ class Rigidbody:
         """
         Returns the friction coefficient for the pair of materials.
         """
-        return min(self.friction_coefficient, other_rb.friction_coefficient) # needs to better config friction_coefficient
+        return min(self.friction_coefficient,
+                   other_rb.friction_coefficient)  # needs to better config friction_coefficient
         if not other_rb:
             return self.friction_coefficient
         if self.friction_coefficient != Rigidbody._default_friction or other_rb.friction_coefficient != Rigidbody._default_friction:
@@ -305,6 +252,7 @@ class Rigidbody:
         elif rb2:
             restitution = rb2.restitution
         return restitution
+
     def AddForce(self, force, ContactPoint=None):
         # Linear force always contributes directly to acceleration
         self.force += force
@@ -370,14 +318,13 @@ class Rigidbody:
             hy = owner_object.size.y
             hz = owner_object.size.z
 
-
-
             self.inertia = box_inertia_vector(self.mass, hx, hy, hz, self._COM)
         self.center_of_mass = owner_object.position
         self.obj = owner_object
         self.material = owner_object.material.kind
         self.forward = owner_object.quaternion.rotate(owner_object.position)
         EPSILON = 1e-8  # Small value to avoid division by zero
+
         def safe_inverse(value):
             return 1.0 / value if abs(value) > EPSILON else 0.0
 
@@ -389,7 +336,6 @@ class Rigidbody:
         self.parent = owner_object
         self._update_inertia_world()
 
-
     def _update_inertia_world(self):
         if not self or self.isKinematic:
             self._Iinv_world = np.zeros((3, 3))
@@ -400,3 +346,15 @@ class Rigidbody:
 
     def Iinv_world(self):
         return self._Iinv_world
+
+    def applyTorqueImpulse(self, impulse, R):
+        torque_impulse = R.cross(impulse)
+        local_torque_impulse = self.parent.quaternion.conjugate().rotate(torque_impulse)
+        local_delta_w = local_torque_impulse * self.inv_inertia
+        ang_impulse = self.parent.quaternion.rotate(local_delta_w)
+        if self.Freeze_Rotation.x == 0:
+            self.angular_velocity.x += ang_impulse.x
+        if self.Freeze_Rotation.y == 0:
+            self.angular_velocity.y += ang_impulse.y
+        if self.Freeze_Rotation.z == 0:
+            self.angular_velocity.z += ang_impulse.z

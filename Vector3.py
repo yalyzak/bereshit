@@ -4,15 +4,15 @@ from math import sqrt
 from dataclasses import dataclass
 
 
-
 class Vector3:
     __slots__ = ("x", "y", "z")
-    def __init__(self,x=0,y=0,z=0):
-            self.x = x
-            self.y = y
-            self.z = z
 
-    def floor(self, factor = 10 ** 5):
+    def __init__(self, x=0, y=0, z=0):
+        self.x = x
+        self.y = y
+        self.z = z
+
+    def floor(self, factor=10 ** 5):
         return Vector3(math.floor(self.x * factor) / factor, math.floor(self.y * factor) / factor,
                        math.floor(self.z * factor) / factor)
 
@@ -33,16 +33,10 @@ class Vector3:
         return Vector3(-self.x, -self.y, -self.z)
 
     def __add__(self, other):
-        if isinstance(other, Vector3):
-            return Vector3(self.x + other.x, self.y + other.y, self.z + other.z)
-        elif isinstance(other, (list, tuple, np.ndarray)) and len(other) == 3:
-            return Vector3(self.x + other[0], self.y + other[1], self.z + other[2])
-        raise TypeError(f"Unsupported type for addition: {type(other)}")
+        return Vector3(self.x + other.x, self.y + other.y, self.z + other.z)
 
     def __sub__(self, other):
-        if isinstance(other, Vector3):
-            return Vector3(self.x - other.x, self.y - other.y, self.z - other.z)
-        raise TypeError("Subtraction only supported between Vector3 instances")
+        return Vector3(self.x - other.x, self.y - other.y, self.z - other.z)
 
     def __truediv__(self, other):
         if isinstance(other, Vector3):
@@ -144,6 +138,7 @@ class Vector3:
     @classmethod
     def Lerp(clas, start, end, t):
         return start + (end - start) * t
+
     def magnitude(self):
         return (self.x ** 2 + self.y ** 2 + self.z ** 2) ** 0.5
 
@@ -167,7 +162,7 @@ class Vector3:
         if self.x == 0 or self.y == 0 or self.z == 0:
             raise ZeroDivisionError("Cannot invert zero component")
 
-        return Vector3(1/self.x, 1/self.y, 1/self.z)
+        return Vector3(1 / self.x, 1 / self.y, 1 / self.z)
 
     def __rmul__(self, other):
         return self.__mul__(other)
@@ -190,3 +185,14 @@ class Vector3:
             [z, 0, -x],
             [-y, x, 0]
         ])
+
+    def Zero(self):
+        self.x = 0
+        self.y = 0
+        self.z = 0
+
+    def NegativeSelf(self):
+        self.x = -self.x
+        self.y = -self.y
+        self.z = -self.z
+
