@@ -196,3 +196,9 @@ class Vector3:
         self.y = -self.y
         self.z = -self.z
 
+    def MatrixMultiplication(self, matrix):
+        return Vector3(
+            self.x * matrix[0][0] + self.y * matrix[1][0] + self.z * matrix[2][0],
+            self.x * matrix[0][1] + self.y * matrix[1][1] + self.z * matrix[2][1],
+            self.x * matrix[0][2] + self.y * matrix[1][2] + self.z * matrix[2][2],
+        )

@@ -198,8 +198,22 @@ class BoxCollider(Collider):
 
     @staticmethod
     def __project_box(center, axes, half_sizes, axis):
-        c = center.dot(axis)
-        r = sum(abs(axis.dot(a)) * h for a, h in zip(axes, half_sizes))
+        c = center.x * axis.x + center.y * axis.y + center.z * axis.z
+
+        a0 = axes[0]
+        a1 = axes[1]
+        a2 = axes[2]
+
+        d0 = axis.x * a0.x + axis.y * a0.y + axis.z * a0.z
+        d1 = axis.x * a1.x + axis.y * a1.y + axis.z * a1.z
+        d2 = axis.x * a2.x + axis.y * a2.y + axis.z * a2.z
+
+        r = (
+                abs(d0) * half_sizes[0] +
+                abs(d1) * half_sizes[1] +
+                abs(d2) * half_sizes[2]
+        )
+
         return c - r, c + r
 
     @staticmethod

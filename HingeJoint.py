@@ -86,14 +86,10 @@ class HingeJoint(Joint):
 
         # Apply angular impulse from the lever arms
         if not a.isKinematic:
-            a.angular_velocity += Vector3.from_np(
-                IinvA @ np.cross(rA.to_np(), impulse_np)
-            )
+            a.angular_velocity += Vector3.from_np(IinvA @ rA.cross(impulse).to_np())
 
         if not b.isKinematic:
-            b.angular_velocity -= Vector3.from_np(
-                IinvB @ np.cross(rB.to_np(), impulse_np)
-            )
+            b.angular_velocity -= Vector3.from_np(IinvB @ rB.cross(impulse).to_np())
 
     def solve_angular(self, dt):
         a, b = self.rbA, self.rbB

@@ -40,15 +40,13 @@ class Quaternion:
         raise TypeError(f"Unsupported type for subtraction: {type(other)}")
 
     def __mul__(self, other):
-        if isinstance(other, Quaternion):
-            # Hamilton product
-            return Quaternion(
-                self.w * other.x + self.x * other.w + self.y * other.z - self.z * other.y,
-                self.w * other.y - self.x * other.z + self.y * other.w + self.z * other.x,
-                self.w * other.z + self.x * other.y - self.y * other.x + self.z * other.w,
-                self.w * other.w - self.x * other.x - self.y * other.y - self.z * other.z
-            )
-        raise TypeError("Quaternion can only be multiplied by another Quaternion")
+        return Quaternion(
+            self.w * other.x + self.x * other.w + self.y * other.z - self.z * other.y,
+            self.w * other.y - self.x * other.z + self.y * other.w + self.z * other.x,
+            self.w * other.z + self.x * other.y - self.y * other.x + self.z * other.w,
+            self.w * other.w - self.x * other.x - self.y * other.y - self.z * other.z
+        )
+
 
     def __truediv__(self, other):
         if isinstance(other, (int, float)):

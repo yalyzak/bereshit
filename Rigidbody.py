@@ -96,7 +96,7 @@ class Rigidbody:
 
         J = -(1 + restitution) * v_norm / inv_eff_mass
 
-        Rigidbody.__apply_impulse_pair(rb1, rb2, normal, J, r1, r2)
+        Rigidbody.apply_impulse_pair(rb1, rb2, normal*J, r1, r2)
 
         if apply_friction:
             rb1._apply_friction_impulse(rb2, relative_vel, normal, J, r1, r2)
@@ -168,11 +168,10 @@ class Rigidbody:
         max_friction = mu * J
         Jt_magnitude = max(-max_friction, min(Jt_magnitude, max_friction))
 
-        Rigidbody.__apply_impulse_pair(self, other, tangent, Jt_magnitude, r1, r2)
+        Rigidbody.apply_impulse_pair(self, other, tangent*Jt_magnitude, r1, r2)
 
     @staticmethod
-    def __apply_impulse_pair(rb1, rb2, normal, J, r1, r2):
-        impulse_vec = normal * J
+    def apply_impulse_pair(rb1, rb2, impulse_vec, r1, r2):
         negative_impulse = -impulse_vec
 
         if rb1 and not rb1.isKinematic:
@@ -323,6 +322,7 @@ class Rigidbody:
         self.obj = owner_object
         self.material = owner_object.material.kind
         self.forward = owner_object.quaternion.rotate(owner_object.position)
+
         EPSILON = 1e-8  # Small value to avoid division by zero
 
         def safe_inverse(value):
