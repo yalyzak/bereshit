@@ -183,40 +183,29 @@ class Rigidbody:
             rb2.applyTorqueImpulse(negative_impulse, r2)
 
     def integrat(self, dt):
-        # === 4) INTEGRATION PHASE ===
-        # 4.1) Linear acceleration & velocity:
-        self.acceleration = self.force / self.mass
+        self.acceleration = self.force * self.invMass
 
-        # 4.2) Angular acceleration & velocity (component‐wise):
-        # I_world_inv = Iinv_world(rb)
-        # rb.angular_acceleration = I_world_inv @ rb.torque
-        self.angular_acceleration = Vector3(
-            self.torque.x / self.inertia.x if self.inertia.x != 0 else 0,
-            self.torque.y / self.inertia.y if self.inertia.y != 0 else 0,
-            self.torque.z / self.inertia.z if self.inertia.z != 0 else 0
-        )
-        # 4.3) Integrate rotation
+        self.angular_acceleration.x = self.torque.x / self.inertia.x
+        self.angular_acceleration.y = self.torque.x / self.inertia.y
+        self.angular_acceleration.z = self.torque.x / self.inertia.x
 
         ang_disp = self.angular_velocity * dt \
                    + 0.5 * self.angular_acceleration * dt * dt
+
         if ang_disp.magnitude() > 0:
             self._update_inertia_world()
-        self.angular_velocity += self.angular_acceleration * dt
-        w = self.angular_velocity
-        mag = w.magnitude()
-        # if mag > 0:
-        #     self.angular_velocity -= w.normalized() * (0.05 * mag * dt / (1/60))
 
-        self.parent.quaternion = self.parent.quaternion * Quaternion.euler_radians(ang_disp)  # this line was
-        # originally mistakenly used local rotation, the fix may cause extreme instability in physics
+        self.angular_velocity += self.angular_acceleration * dt
+
+        self.parent.quaternion *= Quaternion.euler_radians(ang_disp)
 
         self.parent.position += self.velocity * dt \
                                 + 0.5 * self.acceleration * dt * dt
 
         self.velocity += self.acceleration * dt
 
-        self.force = Vector3(0, 0, 0)
-        self.torque = Vector3(0, 0, 0)
+        self.force.Zero()
+        self.torque.Zero()
 
     def _get_friction(self, other_rb):
         """
@@ -341,7 +330,7 @@ class Rigidbody:
             self._Iinv_world = np.zeros((3, 3))
             return None
 
-        R = self.parent.quaternion.to_matrix3()
+        R = self.parent.quaternion.to_matrix3(self.parent.Cache.R)
         self._Iinv_world = R @ self.inverse_inertia @ R.T
 
     def Iinv_world(self):
@@ -349,7 +338,7 @@ class Rigidbody:
 
     def applyTorqueImpulse(self, impulse, R):
         torque_impulse = R.cross(impulse)
-        local_torque_impulse = self.parent.quaternion.conjugate().rotate(torque_impulse)
+        local_torque_impulse = self.parent.quaternion.rotate_conjugated(torque_impulse)
         local_delta_w = local_torque_impulse * self.inv_inertia
         ang_impulse = self.parent.quaternion.rotate(local_delta_w)
         if self.Freeze_Rotation.x == 0:

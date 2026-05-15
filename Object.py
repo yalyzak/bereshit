@@ -8,6 +8,7 @@ from bereshit.Material import Material
 from bereshit.MeshRander import MeshRander
 from bereshit.Quaternion import Quaternion
 from bereshit.Vector3 import Vector3
+from bereshit.Cache import Cache
 
 
 class Position(Vector3): pass
@@ -104,6 +105,7 @@ class Object:
         obj_copy.name = copy.deepcopy(self.name, memo)
         obj_copy.__default_position = copy.deepcopy(self.__default_position, memo)
         obj_copy.__default_quaternion = copy.deepcopy(self.__default_quaternion, memo)
+        obj_copy.Cache = copy.deepcopy(self.Cache, memo)
 
         # 4. Copy children (MANUALLY to control parent)
         obj_copy.children = []
@@ -211,6 +213,8 @@ class Object:
 
         self.add_component(Material())
         self.add_component(MeshRander(shape="box"))
+
+        self.Cache = Cache()
 
 
     def search(self, target_name):

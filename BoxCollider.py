@@ -26,7 +26,7 @@ class BoxCollider(Collider):
 
     def Raycast(self, origin, direction, maxDistance=float('inf'), hit=None):  # needs fixing
         return self.__ray_obb_intersection(origin, direction, self.parent.position.to_np(),
-                                           self.parent.quaternion.to_matrix3(), self.parent.size.to_np() * 0.5)
+                                           self.parent.quaternion.to_matrix3(self.parent.Cache.R), self.parent.size.to_np() * 0.5)
 
     @staticmethod
     def __generate_contacts(sat_result):
@@ -131,8 +131,8 @@ class BoxCollider(Collider):
         a_center = self.position
         b_center = other_collider.position
 
-        a_axes = BoxCollider.__get_axes(self.quaternion)
-        b_axes = BoxCollider.__get_axes(other_collider.quaternion.conjugate())
+        a_axes = self.__get_axes(self.quaternion)
+        b_axes = self.__get_axes(other_collider.quaternion.conjugate())
 
         a_half = self.size * 0.5
         b_half = other_collider.size * 0.5
@@ -187,9 +187,9 @@ class BoxCollider(Collider):
             "B": other_collider
         }
 
-    @staticmethod
-    def __get_axes(rotation: Quaternion):
-        R = rotation.to_matrix3()
+
+    def __get_axes(self, rotation):
+        R = rotation.to_matrix3(self.parent.Cache.R)
         return [
             Vector3(*R[:, 0]).normalized(),
             Vector3(*R[:, 1]).normalized(),

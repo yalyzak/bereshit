@@ -35,7 +35,7 @@ class HingeJoint(Joint):
 
     def solve(self, dt):
         super().solve(dt)
-        self.axis_world = self.body_b.quaternion.conjugate().rotate(self.axis_local).normalized()
+        self.axis_world = self.body_b.quaternion.rotate_conjugated(self.axis_local).normalized()
 
     def solve_linear(self, dt):
         a, b = self.rbA, self.rbB
@@ -47,8 +47,8 @@ class HingeJoint(Joint):
         inv_mB = b.invMass
 
         # World-space lever arms
-        rA = self.body_a.quaternion.conjugate().rotate(self.local_anchor_a)
-        rB = self.body_b.quaternion.conjugate().rotate(self.local_anchor_b)
+        rA = self.body_a.quaternion.rotate_conjugated(self.local_anchor_a)
+        rB = self.body_b.quaternion.rotate_conjugated(self.local_anchor_b)
 
         # Velocities at the anchor points
         vA = a.velocity + a.angular_velocity.cross(-rA)
@@ -65,11 +65,16 @@ class HingeJoint(Joint):
         # Effective mass matrix  K = (1/mA + 1/mB)*I + [rA]x * IinvA * [rA]x^T
         #                                             + [rB]x * IinvB * [rB]x^T
         inv_mass = inv_mA + inv_mB
+
+        # 7.5
+
         rA_skew = rA.skew()
         rB_skew = rB.skew()
 
+        np.fill_diagonal(self.inv_mass_array, inv_mass)
+
         K = (
-                inv_mass * np.identity(3)
+                 self.inv_mass_array
                 + rA_skew @ IinvA @ rA_skew.T
                 + rB_skew @ IinvB @ rB_skew.T
         )
@@ -77,6 +82,8 @@ class HingeJoint(Joint):
         # Solve  K * impulse = -(dv + bias)
         impulse_np = -Joint.solve3x3(K, (dv + bias).to_np())
         impulse = Vector3.from_np(impulse_np)
+
+        # 15
 
         # Apply linear impulse
         if not a.isKinematic:
@@ -86,10 +93,10 @@ class HingeJoint(Joint):
 
         # Apply angular impulse from the lever arms
         if not a.isKinematic:
-            a.angular_velocity += Vector3.from_np(IinvA @ rA.cross(impulse).to_np())
+            a.angular_velocity += rA.cross(impulse).MatrixMultiplication(IinvA)
 
         if not b.isKinematic:
-            b.angular_velocity -= Vector3.from_np(IinvB @ rB.cross(impulse).to_np())
+            b.angular_velocity -= rB.cross(impulse).MatrixMultiplication(IinvB)
 
     def solve_angular(self, dt):
         a, b = self.rbA, self.rbB
@@ -98,10 +105,10 @@ class HingeJoint(Joint):
         IinvB = b.Iinv_world()
 
         # Hinge axis in world space (attached to body A)
-        axis_world = self.body_a.quaternion.conjugate().rotate(self.axis_local).normalized()
+        axis_world = self.body_a.quaternion.rotate_conjugated(self.axis_local).normalized()
 
         # Build two axes perpendicular to the hinge axis
-        t1 = self._perp(axis_world)
+        t1 = self.__perp(axis_world)
         t2 = axis_world.cross(t1).normalized()
 
         # Relative angular velocity
@@ -139,12 +146,13 @@ class HingeJoint(Joint):
 
         # Expand back to 3D: impulse = t1 * lambda1 + t2 * lambda2
         ang_impulse_np = J.T @ ang_impulse_2d  # (3,)
+        ang_impulse = Vector3.from_np(ang_impulse_np)
 
         # Apply angular impulse
         if not a.isKinematic:
-            a.angular_velocity -= Vector3.from_np(IinvA @ ang_impulse_np)
+            a.angular_velocity -= ang_impulse.MatrixMultiplication(IinvA)
         if not b.isKinematic:
-            b.angular_velocity += Vector3.from_np(IinvB @ ang_impulse_np)
+            b.angular_velocity += ang_impulse.MatrixMultiplication(IinvB)
 
         # ---------------------------------------------------------------
         #  3) Hinge-axis friction (optional)
@@ -203,14 +211,54 @@ class HingeJoint(Joint):
     #  Helper — find a vector perpendicular to the given axis
     # ------------------------------------------------------------------ #
     @staticmethod
-    def _perp(axis):
-        """Return an arbitrary unit vector perpendicular to *axis*."""
-        a = axis.to_np()
-        # Pick the cardinal axis least aligned with `a`
-        if abs(a[0]) < 0.9:
-            candidate = np.array([1.0, 0.0, 0.0])
+    def __perp(axis):
+        """Return an arbitrary unit vector perpendicular to axis."""
+        x, y, z = axis.x, axis.y, axis.z
+
+        # Pick axis least aligned with input
+        if abs(x) < 0.9:
+            helper = Vector3(1.0, 0.0, 0.0)
         else:
-            candidate = np.array([0.0, 1.0, 0.0])
-        perp = np.cross(a, candidate)
-        perp /= np.linalg.norm(perp)
-        return Vector3.from_np(perp)
+            helper = Vector3(0.0, 1.0, 0.0)
+
+        return axis.cross(helper).normalized()
+
+    @staticmethod
+    def __add_K(K, r, I):
+        rx, ry, rz = r.x, r.y, r.z
+
+        i00, i01, i02 = I[0]
+        i10, i11, i12 = I[1]
+        i20, i21, i22 = I[2]
+
+        K[0, 0] += ry * ry * i22 - ry * rz * (i12 + i21) + rz * rz * i11
+        K[0, 1] += -rx * ry * i22 + rx * rz * i21 + ry * rz * i02 - rz * rz * i01
+        K[0, 2] += rx * ry * i12 - rx * rz * i11 - ry * ry * i02 + ry * rz * i01
+
+        K[1, 0] += -rx * ry * i22 + rx * rz * i12 + ry * rz * i20 - rz * rz * i10
+        K[1, 1] += rx * rx * i22 - rx * rz * (i02 + i20) + rz * rz * i00
+        K[1, 2] += -rx * rx * i12 + rx * ry * i02 + rx * rz * i10 - ry * rz * i00
+
+        K[2, 0] += rx * ry * i21 - rx * rz * i11 - ry * ry * i20 + ry * rz * i10
+        K[2, 1] += -rx * rx * i21 + rx * ry * i01 + rx * rz * i20 - ry * rz * i00
+        K[2, 2] += rx * rx * i11 - rx * ry * (i01 + i10) + ry * ry * i00
+
+    @staticmethod
+    def __overwrite_K(K, r, I):
+        rx, ry, rz = r.x, r.y, r.z
+
+        i00, i01, i02 = I[0]
+        i10, i11, i12 = I[1]
+        i20, i21, i22 = I[2]
+
+        K[0, 0] += ry * ry * i22 - ry * rz * (i12 + i21) + rz * rz * i11
+        K[0, 1] = -rx * ry * i22 + rx * rz * i21 + ry * rz * i02 - rz * rz * i01
+        K[0, 2] = rx * ry * i12 - rx * rz * i11 - ry * ry * i02 + ry * rz * i01
+
+        K[1, 0] = -rx * ry * i22 + rx * rz * i12 + ry * rz * i20 - rz * rz * i10
+        K[1, 1] += rx * rx * i22 - rx * rz * (i02 + i20) + rz * rz * i00
+        K[1, 2] = -rx * rx * i12 + rx * ry * i02 + rx * rz * i10 - ry * rz * i00
+
+        K[2, 0] = rx * ry * i21 - rx * rz * i11 - ry * ry * i20 + ry * rz * i10
+        K[2, 1] = -rx * rx * i21 + rx * ry * i01 + rx * rz * i20 - ry * rz * i00
+        K[2, 2] += rx * rx * i11 - rx * ry * (i01 + i10) + ry * ry * i00

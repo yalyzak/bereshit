@@ -16,6 +16,9 @@ class Joint:
         self.body_b = body_b
         self.world_anchor = anchor
         self.beta = beta
+        self.inv_mass_array = np.eye(3)
+        self.K = np.empty((3,3), dtype=float)
+
 
     def attach(self, owner_object):
         """Called by the component system when the joint is added."""
@@ -30,8 +33,8 @@ class Joint:
         # Store the initial relative rotation so we can measure drift
         self.initial_rel_rot = (self.body_a.quaternion.inverse() * self.body_b.quaternion)
 
-        self.local_anchor_a = self.body_a.quaternion.inverse().rotate(self.world_anchor - self.body_a.position)
-        self.local_anchor_b = self.body_b.quaternion.inverse().rotate(self.world_anchor - self.body_b.position)
+        self.local_anchor_a = self.body_a.quaternion.rotate_conjugated(self.world_anchor - self.body_a.position)
+        self.local_anchor_b = self.body_b.quaternion.rotate_conjugated(self.world_anchor - self.body_b.position)
 
         return "joint"
 
@@ -50,10 +53,10 @@ class Joint:
         # Integrate pending forces into velocity (same pattern as FixedJoint)
         if not self.rbA.isKinematic:
             self.rbA.velocity += (self.rbA.force / self.rbA.mass) * dt
-            self.rbA.force = Vector3()
+            self.rbA.force.Zero()
         if not self.rbB.isKinematic:
             self.rbB.velocity += (self.rbB.force / self.rbB.mass) * dt
-            self.rbB.force = Vector3()
+            self.rbB.force.Zero()
         self.solve_linear(dt)
         self.solve_angular(dt)
 
@@ -164,3 +167,37 @@ class Joint:
         x1 = (-d * b[0] + a * b[1]) * inv_det
 
         return np.array([x0, x1])
+
+    @staticmethod
+    @njit
+    def solve_sym_3x3(K, b):
+        a00, a01, a02 = K[0]
+        a10, a11, a12 = K[1]
+        a20, a21, a22 = K[2]
+
+        det = (
+                a00 * (a11 * a22 - a12 * a21)
+                - a01 * (a10 * a22 - a12 * a20)
+                + a02 * (a10 * a21 - a11 * a20)
+        )
+
+        inv_det = 1.0 / det
+
+        # Cofactor inverse
+        i00 = (a11 * a22 - a12 * a21) * inv_det
+        i01 = (a02 * a21 - a01 * a22) * inv_det
+        i02 = (a01 * a12 - a02 * a11) * inv_det
+
+        i10 = (a12 * a20 - a10 * a22) * inv_det
+        i11 = (a00 * a22 - a02 * a20) * inv_det
+        i12 = (a02 * a10 - a00 * a12) * inv_det
+
+        i20 = (a10 * a21 - a11 * a20) * inv_det
+        i21 = (a01 * a20 - a00 * a21) * inv_det
+        i22 = (a00 * a11 - a01 * a10) * inv_det
+
+        return np.array([
+            i00 * b[0] + i01 * b[1] + i02 * b[2],
+            i10 * b[0] + i11 * b[1] + i12 * b[2],
+            i20 * b[0] + i21 * b[1] + i22 * b[2],
+        ])

@@ -47,15 +47,12 @@ class Collider:
 
     def get_aabb(self):
         # Half extents
-        half = self.size.to_np() * 0.5
+        half = self.size * 0.5
 
-        rot = self.quaternion.to_matrix3()
-
-        # Take absolute value of rotation matrix
-        abs_rot = np.abs(rot)
+        abs_rot = self.quaternion.to_matrix3_abs(self.parent.Cache.R)
 
         # Compute world extents
-        world_half = Vector3.from_np(abs_rot @ half)
+        world_half = half.MatrixMultiplication(abs_rot)
 
         # AABB min/max
         min_corner = self.position - world_half

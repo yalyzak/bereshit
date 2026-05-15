@@ -1,7 +1,6 @@
 import math
 import numpy as np
 from math import sqrt
-from dataclasses import dataclass
 
 
 class Vector3:
@@ -11,6 +10,7 @@ class Vector3:
         self.x = x
         self.y = y
         self.z = z
+
 
     def floor(self, factor=10 ** 5):
         return Vector3(math.floor(self.x * factor) / factor, math.floor(self.y * factor) / factor,
@@ -179,12 +179,21 @@ class Vector3:
         return f"Vector3(x={self.x}, y={self.y}, z={self.z})"
 
     def skew(self):
-        x, y, z = self.x, self.y, self.z
-        return np.array([
-            [0, -z, y],
-            [z, 0, -x],
-            [-y, x, 0]
-        ])
+        out = np.empty((3, 3), dtype=float)
+
+        out[0, 0] = 0.0
+        out[0, 1] = -self.z
+        out[0, 2] = self.y
+
+        out[1, 0] = self.z
+        out[1, 1] = 0.0
+        out[1, 2] = -self.x
+
+        out[2, 0] = -self.y
+        out[2, 1] = self.x
+        out[2, 2] = 0.0
+
+        return out
 
     def Zero(self):
         self.x = 0
@@ -197,8 +206,10 @@ class Vector3:
         self.z = -self.z
 
     def MatrixMultiplication(self, matrix):
+        r0, r1, r2 = matrix
+
         return Vector3(
-            self.x * matrix[0][0] + self.y * matrix[1][0] + self.z * matrix[2][0],
-            self.x * matrix[0][1] + self.y * matrix[1][1] + self.z * matrix[2][1],
-            self.x * matrix[0][2] + self.y * matrix[1][2] + self.z * matrix[2][2],
+            r0[0] * self.x + r0[1] * self.y + r0[2] * self.z,
+            r1[0] * self.x + r1[1] * self.y + r1[2] * self.z,
+            r2[0] * self.x + r2[1] * self.y + r2[2] * self.z,
         )

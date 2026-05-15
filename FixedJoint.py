@@ -18,8 +18,8 @@ class FixedJoint(Joint):
         inv_mB = b.invMass
 
         # World-space lever arms
-        rA = self.body_a.quaternion.conjugate().rotate(self.local_anchor_a)
-        rB = self.body_b.quaternion.conjugate().rotate(self.local_anchor_b)
+        rA = self.body_a.quaternion.rotate_conjugated(self.local_anchor_a)
+        rB = self.body_b.quaternion.rotate_conjugated(self.local_anchor_b)
 
         # Velocities at the anchor points
         vA = a.velocity + a.angular_velocity.cross(-rA)
@@ -38,9 +38,10 @@ class FixedJoint(Joint):
         inv_mass = inv_mA + inv_mB
         rA_skew = rA.skew()
         rB_skew = rB.skew()
+        np.fill_diagonal(self.inv_mass_array, inv_mass)
 
         K = (
-                inv_mass * np.identity(3)
+                self.inv_mass_array
                 + rA_skew @ IinvA @ rA_skew.T
                 + rB_skew @ IinvB @ rB_skew.T
         )
@@ -57,10 +58,10 @@ class FixedJoint(Joint):
 
         # Apply angular impulse from the lever arms
         if not a.isKinematic:
-            a.angular_velocity += Vector3.from_np(IinvA @ rA.cross(impulse).to_np())
+            a.angular_velocity += rA.cross(impulse).MatrixMultiplication(IinvA)
 
         if not b.isKinematic:
-            b.angular_velocity -= Vector3.from_np(IinvB @ rB.cross(impulse).to_np())
+            b.angular_velocity -= rB.cross(impulse).MatrixMultiplication(IinvB)
 
     def solve_angular(self, dt):
         IA = self.rbA.Iinv_world()
@@ -86,6 +87,8 @@ class FixedJoint(Joint):
         K = IA + IB
 
         impulse = -Joint.solve3x3(K, (rel_w + bias).to_np())
+        impulse = Vector3.from_np(impulse)
+
         if not self.rbA.isKinematic:
-            self.rbA.angular_velocity -= Vector3.from_np(IA @ impulse)
-        self.rbB.angular_velocity += Vector3.from_np(IB @ impulse)
+            self.rbA.angular_velocity -= impulse.MatrixMultiplication(IA)
+        self.rbB.angular_velocity += impulse.MatrixMultiplication(IB)

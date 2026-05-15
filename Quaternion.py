@@ -1,5 +1,6 @@
 import math
 import numpy as np
+from numba import njit
 from bereshit.Vector3 import Vector3
 
 
@@ -40,11 +41,12 @@ class Quaternion:
         raise TypeError(f"Unsupported type for subtraction: {type(other)}")
 
     def __mul__(self, other):
+        w = self.w
         return Quaternion(
-            self.w * other.x + self.x * other.w + self.y * other.z - self.z * other.y,
-            self.w * other.y - self.x * other.z + self.y * other.w + self.z * other.x,
-            self.w * other.z + self.x * other.y - self.y * other.x + self.z * other.w,
-            self.w * other.w - self.x * other.x - self.y * other.y - self.z * other.z
+            w * other.x + self.x * other.w + self.y * other.z - self.z * other.y,
+            w * other.y - self.x * other.z + self.y * other.w + self.z * other.x,
+            w * other.z + self.x * other.y - self.y * other.x + self.z * other.w,
+            w * other.w - self.x * other.x - self.y * other.y - self.z * other.z
         )
 
 
@@ -200,6 +202,7 @@ class Quaternion:
             axis.y * s,
             axis.z * s
         )
+
     def look_rotation(forward: "Vector3", up: "Vector3") -> "Quaternion":
         """
         Builds a quaternion that rotates the +Z axis to align with `forward`,
@@ -273,25 +276,72 @@ class Quaternion:
         else:
             return Vector3(self.x / s, self.y / s, self.z / s), angle
 
-    def to_matrix3(self):
-        """Returns a 3x3 rotation matrix (as numpy array) from this quaternion."""
-        x, y, z, w = self.x, self.y, self.z, self.w
+    def to_matrix3(self, out):
+        # if out is None:
+        #     out = np.empty((3, 3), dtype=np.float64)
 
-        return np.array([
-            [1 - 2 * y * y - 2 * z * z, 2 * x * y - 2 * z * w, 2 * x * z + 2 * y * w],
-            [2 * x * y + 2 * z * w, 1 - 2 * x * x - 2 * z * z, 2 * y * z - 2 * x * w],
-            [2 * x * z - 2 * y * w, 2 * y * z + 2 * x * w, 1 - 2 * x * x - 2 * y * y]
-        ])
+        x = self.x
+        y = self.y
+        z = self.z
+        w = self.w
+
+        xx = 2.0 * x * x
+        yy = 2.0 * y * y
+        zz = 2.0 * z * z
+
+        xy = 2.0 * x * y
+        xz = 2.0 * x * z
+        yz = 2.0 * y * z
+
+        wx = 2.0 * w * x
+        wy = 2.0 * w * y
+        wz = 2.0 * w * z
+
+        out[0, 0] = 1.0 - yy - zz
+        out[0, 1] = xy - wz
+        out[0, 2] = xz + wy
+
+        out[1, 0] = xy + wz
+        out[1, 1] = 1.0 - xx - zz
+        out[1, 2] = yz - wx
+
+        out[2, 0] = xz - wy
+        out[2, 1] = yz + wx
+        out[2, 2] = 1.0 - xx - yy
+
+        return out
 
     def rotate(self, v: Vector3) -> Vector3:
-        """
-        Rotate a Vector3 `v` by this quaternion.
-        """
-        qv = Quaternion(v.x, v.y, v.z, 0)
-        rotated = self * qv * self.inverse()
-        return Vector3(rotated.x, rotated.y, rotated.z)
+        qx, qy, qz, qw = self.x, self.y, self.z, self.w
+        vx, vy, vz = v.x, v.y, v.z
 
+        # t = 2 * cross(q.xyz, v)
+        tx = 2 * (qy * vz - qz * vy)
+        ty = 2 * (qz * vx - qx * vz)
+        tz = 2 * (qx * vy - qy * vx)
 
+        # v' = v + qw * t + cross(q.xyz, t)
+        rx = vx + qw * tx + (qy * tz - qz * ty)
+        ry = vy + qw * ty + (qz * tx - qx * tz)
+        rz = vz + qw * tz + (qx * ty - qy * tx)
+
+        return Vector3(rx, ry, rz)
+
+    def rotate_conjugated(self, v: Vector3) -> Vector3:
+        qx, qy, qz, qw = self.x, self.y, self.z, self.w
+        vx, vy, vz = v.x, v.y, v.z
+
+        # t = 2 * cross(q.xyz, v)
+        tx = 2 * (qy * vz - qz * vy)
+        ty = 2 * (qz * vx - qx * vz)
+        tz = 2 * (qx * vy - qy * vx)
+
+        # v' = v - qw * t + cross(q.xyz, t)
+        rx = vx - qw * tx + (qy * tz - qz * ty)
+        ry = vy - qw * ty + (qz * tx - qx * tz)
+        rz = vz - qw * tz + (qx * ty - qy * tx)
+
+        return Vector3(rx, ry, rz)
 
     @staticmethod
     def from_basis(right, up, forward):
@@ -336,3 +386,36 @@ class Quaternion:
 
     def to_np(self):
         return np.array([self.x, self.y, self.z, self.w], dtype='f4')
+
+    def to_matrix3_abs(self, m):
+        x = self.x
+        y = self.y
+        z = self.z
+        w = self.w
+
+        xx = 2.0 * x * x
+        yy = 2.0 * y * y
+        zz = 2.0 * z * z
+
+        xy = 2.0 * x * y
+        xz = 2.0 * x * z
+        yz = 2.0 * y * z
+
+        wx = 2.0 * w * x
+        wy = 2.0 * w * y
+        wz = 2.0 * w * z
+
+        m[0, 0] = abs(1.0 - yy - zz)
+        m[0, 1] = abs(xy - wz)
+        m[0, 2] = abs(xz + wy)
+
+        m[1, 0] = abs(xy + wz)
+        m[1, 1] = abs(1.0 - xx - zz)
+        m[1, 2] = abs(yz - wx)
+
+        m[2, 0] = abs(xz - wy)
+        m[2, 1] = abs(yz + wx)
+        m[2, 2] = abs(1.0 - xx - yy)
+
+        return m
+

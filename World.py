@@ -13,7 +13,7 @@ from bereshit.Physics import Physics
 
 logger = logging.getLogger(__name__)
 class World:
-    def __init__(self, running_flag, children=None, gizmos=False, gravity=Vector3(0, -9.8, 0), tick=None, speed=None, physics_epochs=1, scale=1):
+    def __init__(self, running_flag, children=None, gizmos=False, gravity=Vector3(0, -9.8, 0), tick=1/60, speed=1, physics_epochs=1, scale=1):
         self.RunningFlag = running_flag
         self.children = children or []
         cameras = self.search_by_component('Camera')
