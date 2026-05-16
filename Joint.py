@@ -6,6 +6,9 @@ import warnings
 from numba import njit
 
 class Joint:
+    solve3x3Array = np.empty(3, dtype=float)
+    solve2x2Array = np.empty(2, dtype=float)
+
     def __init__(self, body_b, anchor=None, beta=0.2):
         self.local_anchor_b = None
         self.local_anchor_a = None
@@ -17,7 +20,6 @@ class Joint:
         self.world_anchor = anchor
         self.beta = beta
         self.inv_mass_array = np.eye(3)
-        self.K = np.empty((3,3), dtype=float)
 
 
     def attach(self, owner_object):
@@ -30,13 +32,7 @@ class Joint:
         if self.world_anchor is None:
             self.cast_anchor()
 
-        # Store the initial relative rotation so we can measure drift
-        self.initial_rel_rot = (self.body_a.quaternion.inverse() * self.body_b.quaternion)
-
-        self.local_anchor_a = self.body_a.quaternion.rotate_conjugated(self.world_anchor - self.body_a.position)
-        self.local_anchor_b = self.body_b.quaternion.rotate_conjugated(self.world_anchor - self.body_b.position)
-
-        return "joint"
+        return "Joint"
 
     def cast_anchor(self):
         hit = Physics.Raycast(self.body_a.position, (self.body_b.position - self.body_a.position), self.body_b.Collider).point
@@ -45,6 +41,13 @@ class Joint:
             self.world_anchor = hit
         else:
             self.__cast_anchor_default()  # fall back
+
+        # Store the initial relative rotation so we can measure drift
+        self.initial_rel_rot = (self.body_a.quaternion.inverse() * self.body_b.quaternion)
+
+        self.local_anchor_a = self.body_a.quaternion.rotate_conjugated(self.world_anchor - self.body_a.position)
+        self.local_anchor_b = self.body_b.quaternion.rotate_conjugated(self.world_anchor - self.body_b.position)
+
 
     def __cast_anchor_default(self):
         self.world_anchor = self.body_b.position
@@ -73,10 +76,14 @@ class Joint:
             UserWarning,
             stacklevel=2
         )
+    @staticmethod
+    def solve3x3(K, b):
+        Joint.__solve3x3(K, b, Joint.solve3x3Array)
+        return Joint.solve3x3Array
 
     @staticmethod
     @njit
-    def solve3x3(K, b):
+    def __solve3x3(K, b, array):
         """
         Solve Kx = b for a 3x3 matrix using Cramer's rule.
 
@@ -127,15 +134,18 @@ class Joint:
         m21 = (b1 * g - a * h) * inv_det
         m22 = (a * e - b1 * d) * inv_det
 
-        x0 = m00 * b[0] + m01 * b[1] + m02 * b[2]
-        x1 = m10 * b[0] + m11 * b[1] + m12 * b[2]
-        x2 = m20 * b[0] + m21 * b[1] + m22 * b[2]
+        array[0] = m00 * b[0] + m01 * b[1] + m02 * b[2]
+        array[1] = m10 * b[0] + m11 * b[1] + m12 * b[2]
+        array[2] = m20 * b[0] + m21 * b[1] + m22 * b[2]
 
-        return np.array([x0, x1, x2])
+    @staticmethod
+    def solve2x2(K, b):
+        Joint.__solve2x2(K, b, Joint.solve2x2Array)
+        return Joint.solve2x2Array
 
     @staticmethod
     @njit
-    def solve2x2(K, b):
+    def __solve2x2(K, b, array):
         """
         Solve Kx = b for a 2x2 matrix.
 
@@ -163,10 +173,10 @@ class Joint:
         inv_det = 1.0 / det
 
         # inverse(K) * b
-        x0 = (e * b[0] - c * b[1]) * inv_det
-        x1 = (-d * b[0] + a * b[1]) * inv_det
+        array[0] = (e * b[0] - c * b[1]) * inv_det
+        array[1] = (-d * b[0] + a * b[1]) * inv_det
 
-        return np.array([x0, x1])
+
 
     @staticmethod
     @njit

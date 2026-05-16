@@ -7,6 +7,11 @@ class FixedJoint(Joint):
 
     def cast_anchor(self):
         self.world_anchor = (self.body_a.position + self.body_b.position) * 0.5
+        # Store the initial relative rotation so we can measure drift
+        self.initial_rel_rot = (self.body_a.quaternion.inverse() * self.body_b.quaternion)
+
+        self.local_anchor_a = self.body_a.quaternion.rotate_conjugated(self.world_anchor - self.body_a.position)
+        self.local_anchor_b = self.body_b.quaternion.rotate_conjugated(self.world_anchor - self.body_b.position)
 
     def solve_linear(self, dt):
         a, b = self.rbA, self.rbB
@@ -36,8 +41,8 @@ class FixedJoint(Joint):
         # Effective mass matrix  K = (1/mA + 1/mB)*I + [rA]x * IinvA * [rA]x^T
         #                                             + [rB]x * IinvB * [rB]x^T
         inv_mass = inv_mA + inv_mB
-        rA_skew = rA.skew()
-        rB_skew = rB.skew()
+        rA_skew = rA.skew(self.parent.Cache.skewA)
+        rB_skew = rB.skew(self.parent.Cache.skewB)
         np.fill_diagonal(self.inv_mass_array, inv_mass)
 
         K = (

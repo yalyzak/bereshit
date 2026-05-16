@@ -1,6 +1,7 @@
 import math
 import numpy as np
 from math import sqrt
+from numba import njit
 
 
 class Vector3:
@@ -178,9 +179,7 @@ class Vector3:
     def __repr__(self):
         return f"Vector3(x={self.x}, y={self.y}, z={self.z})"
 
-    def skew(self):
-        out = np.empty((3, 3), dtype=float)
-
+    def skew(self, out):
         out[0, 0] = 0.0
         out[0, 1] = -self.z
         out[0, 2] = self.y
@@ -206,10 +205,12 @@ class Vector3:
         self.z = -self.z
 
     def MatrixMultiplication(self, matrix):
-        r0, r1, r2 = matrix
+        return Vector3(*Vector3.__MatrixMultiplication(matrix, self.x, self.y, self.z))
 
-        return Vector3(
-            r0[0] * self.x + r0[1] * self.y + r0[2] * self.z,
-            r1[0] * self.x + r1[1] * self.y + r1[2] * self.z,
-            r2[0] * self.x + r2[1] * self.y + r2[2] * self.z,
-        )
+    @staticmethod
+    @njit
+    def __MatrixMultiplication(matrix, x, y, z):
+        return matrix[0, 0] * x + matrix[0, 1] * y + matrix[0, 2] * z, matrix[1, 0] * x + matrix[1, 1] * y + matrix[1 ,2] * z,matrix[2, 0] * x + matrix[2, 1] * y + matrix[2, 2] * z
+
+
+

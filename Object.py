@@ -280,14 +280,12 @@ class Object:
         return components
 
     def __getattr__(self, name):
-        # Allow normal attribute access
-        if hasattr(type(self), name):
-            return object.__getattribute__(self, name)
-        # Only called if normal attribute lookup fails
         component = self.components.get(name)
         if component is not None:
             return component
-        raise AttributeError(f"'{self.name}' object has no attribute or component '{name}'")
+        raise AttributeError(
+            f"'{self.name}' object has no attribute or component '{name}'"
+        )
 
     def rotate_around_axis(self, axis, angle_rad):
         """

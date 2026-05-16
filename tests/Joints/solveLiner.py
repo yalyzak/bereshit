@@ -18,5 +18,5 @@ for i in range(1000000):
     joint.solve_linear(1/60)
 
 
-print(time.process_time() - start)
+print(time.process_time() - start) # 14.7
 

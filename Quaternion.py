@@ -388,11 +388,11 @@ class Quaternion:
         return np.array([self.x, self.y, self.z, self.w], dtype='f4')
 
     def to_matrix3_abs(self, m):
-        x = self.x
-        y = self.y
-        z = self.z
-        w = self.w
+        return Quaternion.__to_matrix3_abs(m, self.x, self.y, self.z, self.w)
 
+    @staticmethod
+    @njit
+    def __to_matrix3_abs(m, x, y, z, w):
         xx = 2.0 * x * x
         yy = 2.0 * y * y
         zz = 2.0 * z * z

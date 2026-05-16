@@ -68,8 +68,8 @@ class HingeJoint(Joint):
 
         # 7.5
 
-        rA_skew = rA.skew()
-        rB_skew = rB.skew()
+        rA_skew = rA.skew(self.parent.Cache.skewA)
+        rB_skew = rB.skew(self.parent.Cache.skewB)
 
         np.fill_diagonal(self.inv_mass_array, inv_mass)
 
