@@ -13,6 +13,7 @@ from .render import BereshitRenderer as Render
 from .render import Text as Text
 from .Physics import Physics
 from .Physics import RaycastHit
+from .Cache import Cache
 
 __all__ = ["Vector3", "Quaternion", "Object", "Rigidbody", "BoxCollider", "Material", "Camera", "MeshRander", "World",
-           "FixedJoint.py", "Render"]
+           "FixedJoint.py", "Render", "Cache"]
