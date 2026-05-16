@@ -65,20 +65,33 @@ class Object:
 
     @local_position.setter
     def local_position(self, new_local_position):
+        old_world_position = copy.copy(self.position)
+
         if self.parent is None:
             self.position = copy.copy(new_local_position)
         else:
+            # Convert local position to world position
             world_offset = self.parent.quaternion.rotate(new_local_position)
             self.position = self.parent.position + world_offset
 
+        # World-space movement delta
+        world_delta = self.position - old_world_position
+
+        joint = self.get_component("Joint")
+        if joint:
+            joint.cast_anchor()
+
+        # Update children LOCAL positions instead of world positions
         for child in self.children:
-            child.local_position += new_local_position
+            local_delta = child.parent.quaternion.inverse().rotate(world_delta)
+            child.local_position += local_delta
 
     def set_default_quaternion(self):
-        self.__default_quaternion = copy.copy(self.quaternion)
+        self.__default_quaternion = copy.deepcopy(self.quaternion)
 
     def set_default_position(self):
-        self.__default_position = copy.copy(self.position)
+        self.__default_position = copy.deepcopy(self.position)
+
 
     def set_default(self):
         self.set_default_quaternion()
@@ -107,6 +120,7 @@ class Object:
         obj_copy.__default_quaternion = copy.deepcopy(self.__default_quaternion, memo)
         obj_copy.Cache = copy.deepcopy(self.Cache, memo)
 
+
         # 4. Copy children (MANUALLY to control parent)
         obj_copy.children = []
         for child in self.children:
@@ -116,6 +130,7 @@ class Object:
             child_copy.parent = obj_copy
 
             obj_copy.children.append(child_copy)
+        # obj_copy.local_position = copy.deepcopy(self.local_position, memo)
 
         # 5. Copy components (carefully fix back-references)
         obj_copy.components = {}
