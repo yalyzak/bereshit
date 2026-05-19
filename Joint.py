@@ -21,6 +21,7 @@ class Joint:
         self.beta = beta
         self.inv_mass_array = np.eye(3)
         self.ang_impulse = Vector3()
+        self.K = np.zeros((3, 3), dtype=float)
 
 
     def attach(self, owner_object):
@@ -212,3 +213,164 @@ class Joint:
             i10 * b[0] + i11 * b[1] + i12 * b[2],
             i20 * b[0] + i21 * b[1] + i22 * b[2],
         ])
+
+    @staticmethod
+    def build_effective_mass_matrix(inv_mass, rA, rB, IinvA, IinvB, K):
+        """
+        Builds the 3x3 effective mass matrix:
+
+            K = inv_mass * I
+              + [rA]x * IinvA * [rA]x^T
+              + [rB]x * IinvB * [rB]x^T
+
+        without constructing skew matrices.
+
+        Parameters
+        ----------
+        inv_mass : float
+
+        rA, rB : Vector3
+            Lever arms in world space.
+
+        IinvA, IinvB : np.ndarray shape (3,3)
+            World inverse inertia tensors.
+
+        Returns
+        -------
+        np.ndarray shape (3,3)
+        """
+
+        # ------------------------------------------------------------------
+        # Diagonal from linear inverse mass
+        # ------------------------------------------------------------------
+        K[0, 0] = inv_mass
+        K[1, 1] = inv_mass
+        K[2, 2] = inv_mass
+
+        # ------------------------------------------------------------------
+        # Angular contribution helper
+        # ------------------------------------------------------------------
+
+        # ------------------------------------------------------------------
+
+        Joint.set_angular(K, rA.x, rA.y, rA.z, IinvA)
+        Joint.add_angular(K, rB.x, rB.y, rB.z, IinvB)
+
+        return K
+
+    @staticmethod
+    @njit
+    def add_angular(K, rx, ry, rz, I):
+        # Cross-product matrix columns:
+        #
+        # cx = (0,  rz, -ry)
+        # cy = (-rz, 0,  rx)
+        # cz = (ry, -rx, 0)
+
+        # I * cx
+        ixx = I[0, 0]
+        ixy = I[0, 1]
+        ixz = I[0, 2]
+
+        iyx = I[1, 0]
+        iyy = I[1, 1]
+        iyz = I[1, 2]
+
+        izx = I[2, 0]
+        izy = I[2, 1]
+        izz = I[2, 2]
+
+        # Column X
+        cx_y = rz
+        cx_z = -ry
+
+        ix_y = iyy * rz - iyz * ry
+        ix_z = izy * rz - izz * ry
+
+        # Column Y
+        cy_x = -rz
+        cy_z = rx
+
+        iy_x = -ixx * rz + ixz * rx
+        iy_z = -izx * rz + izz * rx
+
+        # Column Z
+        cz_x = ry
+        cz_y = -rx
+
+        iz_x = ixx * ry - ixy * rx
+        iz_y = iyx * ry - iyy * rx
+
+        # K += C^T * I * C
+
+        K[0, 0] += cx_y * ix_y + cx_z * ix_z
+        K[0, 1] += cx_z * iy_z
+        K[0, 2] += cx_y * iz_y
+
+        K[1, 0] += cy_z * ix_z
+        K[1, 1] += cy_x * iy_x + cy_z * iy_z
+        K[1, 2] += cy_x * iz_x
+
+        K[2, 0] += cz_y * ix_y
+        K[2, 1] += cz_x * iy_x
+        K[2, 2] += cz_x * iz_x + cz_y * iz_y
+
+
+    @staticmethod
+    @njit
+    def set_angular(K, rx, ry, rz, I):
+        # Cross-product matrix columns:
+        #
+        # cx = (0,  rz, -ry)
+        # cy = (-rz, 0,  rx)
+        # cz = (ry, -rx, 0)
+
+        # I * cx
+        ixx = I[0, 0]
+        ixy = I[0, 1]
+        ixz = I[0, 2]
+
+        iyx = I[1, 0]
+        iyy = I[1, 1]
+        iyz = I[1, 2]
+
+        izx = I[2, 0]
+        izy = I[2, 1]
+        izz = I[2, 2]
+
+        # Column X
+        cx_y = rz
+        cx_z = -ry
+
+        ix_y = iyy * rz - iyz * ry
+        ix_z = izy * rz - izz * ry
+
+        # Column Y
+        cy_x = -rz
+        cy_z = rx
+
+        iy_x = -ixx * rz + ixz * rx
+        iy_z = -izx * rz + izz * rx
+
+        # Column Z
+        cz_x = ry
+        cz_y = -rx
+
+        iz_x = ixx * ry - ixy * rx
+        iz_y = iyx * ry - iyy * rx
+
+        # K += C^T * I * C
+
+        K[0, 0] += cx_y * ix_y + cx_z * ix_z
+        K[0, 1] = cx_z * iy_z
+        K[0, 2] = cx_y * iz_y
+
+        K[1, 0] = cy_z * ix_z
+        K[1, 1] += cy_x * iy_x + cy_z * iy_z
+        K[1, 2] = cy_x * iz_x
+
+        K[2, 0] = cz_y * ix_y
+        K[2, 1] = cz_x * iy_x
+        K[2, 2] += cz_x * iz_x + cz_y * iz_y
+
+        # K = Joint.build_effective_mass_matrix(inv_mass, rA, rB, IinvA, IinvA, self.K)

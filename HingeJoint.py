@@ -71,18 +71,7 @@ class HingeJoint(Joint):
         #                                             + [rB]x * IinvB * [rB]x^T
         inv_mass = inv_mA + inv_mB
 
-        # 7.5
-
-        rA_skew = rA.skew(self.parent.Cache.skewA)
-        rB_skew = rB.skew(self.parent.Cache.skewB)
-
-        np.fill_diagonal(self.inv_mass_array, inv_mass)
-
-        K = (
-                 self.inv_mass_array
-                + rA_skew @ IinvA @ rA_skew.T
-                + rB_skew @ IinvB @ rB_skew.T
-        )
+        K = Joint.build_effective_mass_matrix(inv_mass, rA, rB, IinvA, IinvA, self.K)
 
         # Solve  K * impulse = -(dv + bias)
         impulse_np = -Joint.solve3x3(K, (dv + bias).to_np())
@@ -120,8 +109,6 @@ class HingeJoint(Joint):
         rel_w = b.angular_velocity - a.angular_velocity
 
         # Construct the 2-row Jacobian: J = [t1^T; t2^T]
-        J = np.array([t1.to_np(), t2.to_np()])  # (2, 3)
-
         # Effective mass:  K_ang = J * (IinvA + IinvB) * J^T   (2x2)
         K_full = IinvA + IinvB  # (3, 3)
 

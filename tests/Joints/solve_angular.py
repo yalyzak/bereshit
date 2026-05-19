@@ -18,5 +18,5 @@ for i in range(1000000):
     joint.solve_angular(1/60)
 
 
-print(time.process_time() - start) # 11.7
+print(time.process_time() - start)  # 10.32
 

@@ -41,15 +41,8 @@ class FixedJoint(Joint):
         # Effective mass matrix  K = (1/mA + 1/mB)*I + [rA]x * IinvA * [rA]x^T
         #                                             + [rB]x * IinvB * [rB]x^T
         inv_mass = inv_mA + inv_mB
-        rA_skew = rA.skew(self.parent.Cache.skewA)
-        rB_skew = rB.skew(self.parent.Cache.skewB)
-        np.fill_diagonal(self.inv_mass_array, inv_mass)
 
-        K = (
-                self.inv_mass_array
-                + rA_skew @ IinvA @ rA_skew.T
-                + rB_skew @ IinvB @ rB_skew.T
-        )
+        K = Joint.build_effective_mass_matrix(inv_mass, rA, rB, IinvA, IinvA, self.K)
 
         # Solve  K * impulse = -(dv + bias)
         impulse_np = -Joint.solve3x3(K, (dv + bias).to_np())
