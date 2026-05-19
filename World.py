@@ -222,7 +222,7 @@ class World:
                         child_of_child.quaternion = Quaternion.euler(child.rotation + child_of_child.default_rotation)
 
                 if not rb.isKinematic:
-                    child.Rigidbody.integrat(dt)
+                    child.Rigidbody.integrate(dt)
 
     def Exit(self, code=None):
         self.RunningFlag[0] = True

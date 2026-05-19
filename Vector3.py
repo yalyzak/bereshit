@@ -217,3 +217,6 @@ class Vector3:
     @classmethod
     def random(self):
         return self(random.random(), random.random(), random.random())
+
+    def copy(self):
+        return Vector3(self.x, self.y, self.z)

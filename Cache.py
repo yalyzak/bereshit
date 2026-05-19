@@ -1,5 +1,5 @@
 import numpy as np
-from bereshit.Quaternion import Quaternion
+
 
 class Cache:
     def __init__(self):
@@ -9,5 +9,4 @@ class Cache:
         self.skewB = np.zeros((3, 3), dtype=np.float64)
         self.rotation_dirty = True
         self.rotation_dirty_abs = True
-        self.qunt = Quaternion()
-
+        self.aabb_dirty = True

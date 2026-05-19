@@ -417,7 +417,7 @@ class BoxCollider(Collider):
         return BoxCollider.__ray_box_intersection(self, local_origin, local_dir, box_min, box_max)
 
     def attach(self, owner_object):
-        # super().attach(owner_object)
+        super().attach(owner_object)
         box = owner_object.get_component(BoxCollider)  # will remove duplicate renders by default
         if box:
             owner_object.remove_component("Collider")

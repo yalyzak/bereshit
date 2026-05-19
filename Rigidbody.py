@@ -96,7 +96,7 @@ class Rigidbody:
 
         J = -(1 + restitution) * v_norm / inv_eff_mass
 
-        Rigidbody.apply_impulse_pair(rb1, rb2, normal*J, r1, r2)
+        Rigidbody.apply_impulse_pair(rb1, rb2, normal * J, r1, r2)
 
         if apply_friction:
             rb1._apply_friction_impulse(rb2, relative_vel, normal, J, r1, r2)
@@ -168,7 +168,7 @@ class Rigidbody:
         max_friction = mu * J
         Jt_magnitude = max(-max_friction, min(Jt_magnitude, max_friction))
 
-        Rigidbody.apply_impulse_pair(self, other, tangent*Jt_magnitude, r1, r2)
+        Rigidbody.apply_impulse_pair(self, other, tangent * Jt_magnitude, r1, r2)
 
     @staticmethod
     def apply_impulse_pair(rb1, rb2, impulse_vec, r1, r2):
@@ -182,7 +182,7 @@ class Rigidbody:
             rb2.velocity += impulse_vec * rb2.invMass
             rb2.applyTorqueImpulse(negative_impulse, r2)
 
-    def integrat(self, dt):
+    def integrate(self, dt):
 
         self.acceleration = self.force * self.invMass
 
@@ -193,22 +193,25 @@ class Rigidbody:
         if not self.Freeze_Rotation.z:
             self.angular_acceleration.z = self.torque.x / self.inertia.x
 
-        ang_disp = self.angular_velocity * dt \
-                   + 0.5 * self.angular_acceleration * dt * dt
+        ang_disp = self.angular_velocity * dt + 0.5 * self.angular_acceleration * dt * dt
 
         if ang_disp.magnitude() > 0:
             self._update_inertia_world()
             self.parent.rotation = self.parent.quaternion.to_euler()
             self.parent.Cache.rotation_dirty = True
             self.parent.Cache.rotation_dirty_abs = True
-            self.parent.Cache.qunt = self.parent.quaternion * Quaternion.euler_radians(ang_disp)
+            self.parent.Cache.aabb_dirty = True
 
         self.angular_velocity += self.angular_acceleration * dt
 
         self.parent.quaternion *= Quaternion.euler_radians(ang_disp)
 
-        self.parent.position += self.velocity * dt \
-                                + 0.5 * self.acceleration * dt * dt
+        old_pos = self.parent.position.copy()
+
+        self.parent.position += self.velocity * dt + 0.5 * self.acceleration * dt * dt
+
+        if old_pos != self.parent.position:
+            self.parent.Cache.aabb_dirty = True
 
         self.velocity += self.acceleration * dt
 

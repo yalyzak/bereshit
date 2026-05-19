@@ -5,6 +5,7 @@ import numpy as np
 from bereshit.Vector3 import Vector3
 from bereshit.Joint import Joint
 from bereshit.Physics import Physics
+from bereshit.Vector2 import Vector2
 
 
 class HingeJoint(Joint):
@@ -28,6 +29,9 @@ class HingeJoint(Joint):
         self.friction_coefficient = friction_coefficient
         self.max_rotation = max_rotation
         self.min_rotation = min_rotation
+        self.K_ang = np.empty((2, 2), dtype=float)
+        self.vel_error = np.empty(2, dtype=float) # (2,)
+        self.bias = np.empty(2, dtype=float) # (2,)
 
 
 
@@ -120,10 +124,17 @@ class HingeJoint(Joint):
 
         # Effective mass:  K_ang = J * (IinvA + IinvB) * J^T   (2x2)
         K_full = IinvA + IinvB  # (3, 3)
-        K_ang = J @ K_full @ J.T  # (2, 2)
+
+        Kt1 = t1.MatrixMultiplication(K_full)
+        Kt2 = t2.MatrixMultiplication(K_full)
+
+        # J @ K_full @ J.T
+        self.K_ang[0] = t1.dot(Kt1), t1.dot(Kt2)
+        self.K_ang[1] = t2.dot(Kt1), t2.dot(Kt2)
 
         # Velocity error projected onto the two constrained directions
-        vel_error = J @ rel_w.to_np()  # (2,)
+        self.vel_error[0] = t1.dot(rel_w)
+        self.vel_error[1] = t2.dot(rel_w)
 
         # Baumgarte angular correction
         q_rel = self.body_a.quaternion.inverse() * self.body_b.quaternion
@@ -139,21 +150,24 @@ class HingeJoint(Joint):
         ang_error = err_vec * 2.0
 
         # Project the angular error onto the two constrained axes
-
-        bias = J @ ang_error.to_np() * (self.beta / dt)  # (2,)
+        self.bias[0] = t1.dot(ang_error) * (self.beta / dt)
+        self.bias[1] = t2.dot(ang_error) * (self.beta / dt)
 
         # Solve for the 2D impulse
-        ang_impulse_2d = -Joint.solve2x2(K_ang, vel_error + bias)  # (2,)
+        ang_impulse_np = -Joint.solve2x2(self.K_ang, self.vel_error + self.bias)  # (2,)
+        ang_impulse = Vector2.from_np(ang_impulse_np)
 
         # Expand back to 3D: impulse = t1 * lambda1 + t2 * lambda2
-        ang_impulse_np = J.T @ ang_impulse_2d  # (3,)
-        ang_impulse = Vector3.from_np(ang_impulse_np)
+        self.ang_impulse.x = Vector2(t1.x, t2.x).dot(ang_impulse)
+        self.ang_impulse.y = Vector2(t1.y, t2.y).dot(ang_impulse)
+        self.ang_impulse.z = Vector2(t1.z, t2.z).dot(ang_impulse)
+
 
         # Apply angular impulse
         if not a.isKinematic:
-            a.angular_velocity -= ang_impulse.MatrixMultiplication(IinvA)
+            a.angular_velocity -= self.ang_impulse.MatrixMultiplication(IinvA)
         if not b.isKinematic:
-            b.angular_velocity += ang_impulse.MatrixMultiplication(IinvB)
+            b.angular_velocity += self.ang_impulse.MatrixMultiplication(IinvB)
 
         # ---------------------------------------------------------------
         #  3) Hinge-axis friction (optional)

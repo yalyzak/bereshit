@@ -20,6 +20,7 @@ class Joint:
         self.world_anchor = anchor
         self.beta = beta
         self.inv_mass_array = np.eye(3)
+        self.ang_impulse = Vector3()
 
 
     def attach(self, owner_object):

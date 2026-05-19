@@ -11,4 +11,4 @@ obj3 = Object(position=Vector3(3,2,0)).add_component(BoxCollider(), Rigidbody(ve
 
 floor = Object(size=Vector3(100,1,100), position=Vector3(0,-5,0)).add_component(BoxCollider(), Rigidbody(isKinematic=True))
 
-Core.run([cam,floor, obj1, obj2, obj3], MaxTime=60, tick=1/60, speed=100, Render=False)
+Core.run([cam,floor, obj1, obj2, obj3], MaxTime=100, tick=1/60, speed=100, Render=False)

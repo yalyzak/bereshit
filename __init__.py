@@ -1,4 +1,5 @@
 from .Vector3 import Vector3
+from .Vector2 import Vector2
 from .Quaternion import Quaternion  # if you want quick access
 from .Object import Object          # etc.
 from .Rigidbody import Rigidbody

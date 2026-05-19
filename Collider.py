@@ -8,6 +8,7 @@ class Collider:
     Scale = 1
 
     def __init__(self, size=None, position=None, rotation=Vector3(), object_pointer=None, is_trigger=False):
+        self.half_size = None
         self.__delta_size = Vector3() if not size else size
         self.__delta_position = Vector3() if not position else position
         self.__delta_quaternion = Quaternion.euler(rotation)
@@ -17,7 +18,7 @@ class Collider:
         self.enter = False
         self.stay = False
         self.other = None
-
+        self.__cached_min, self.__cached_max = None, None
 
     @property
     def size(self):
@@ -30,6 +31,9 @@ class Collider:
     @property
     def quaternion(self):
         return self.__delta_quaternion * self.parent.quaternion
+
+    def attach(self, parent):
+        self.half_size = (self.__delta_size + parent.size) * 0.5
 
     @staticmethod
     def check_collision(collider1, collider2, single_point=False):
@@ -48,19 +52,23 @@ class Collider:
         )
 
     def get_aabb(self):
+        if not self.parent.Cache.aabb_dirty:
+            return self.__cached_min, self.__cached_max
+
         # Half extents
-        half = self.size * 0.5
+        if self.parent.Cache.rotation_dirty:
+            abs_rot = self.quaternion.to_matrix3_abs(self.parent.Cache)
 
-        abs_rot = self.quaternion.to_matrix3_abs(self.parent.Cache)
+            # Compute world extents
+            world_half = self.half_size.MatrixMultiplication(abs_rot)
+            self.__cached_min, self.__cached_max = self.position - world_half, self.position + world_half
+            # AABB min/max
+            self.parent.Cache.aabb_dirty = False
+            return self.position - world_half, self.position + world_half
 
-        # Compute world extents
-        world_half = half.MatrixMultiplication(abs_rot)
-
-        # AABB min/max
-        min_corner = self.position - world_half
-        max_corner = self.position + world_half
-
-        return min_corner, max_corner
+        self.__cached_min, self.__cached_max = self.position - self.half_size, self.position + self.half_size
+        self.parent.Cache.aabb_dirty = False
+        return self.position - self.half_size, self.position + self.half_size
 
     def OnCollisionEnter(self, collision):
 
