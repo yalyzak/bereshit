@@ -4,29 +4,33 @@ from bereshit.Vector3 import Vector3
 from bereshit.Quaternion import Quaternion
 from bereshit.Physics import RaycastHit
 from bereshit.Collider import Collider, ContactPoints, Collision
+from bereshit.Cache import Cache
 
 
 class BoxCollider(Collider):
 
     @staticmethod
-    def check_collision(collider1, collider2, single_point=False, collided_a=True, collided_b=True):
+    def check_collision(collider1, collider2, single_point=False):
         aabb_hit = BoxCollider.aabb_collision(collider1, collider2)
+
         if not aabb_hit:
-            BoxCollider.handle_collision_exit(collider1, collider2, collided_a, collided_b)
+            BoxCollider.handle_collision_exit(collider1, collider2)
             return None
 
         sat_result = collider1.__SAT(collider2)
         if sat_result is None:
-            BoxCollider.handle_collision_exit(collider1, collider2, collided_a, collided_b)
+            BoxCollider.handle_collision_exit(collider1, collider2)
             return None
 
         contacts = BoxCollider.__generate_contacts(sat_result)
+
         BoxCollider.handle_collision_events(collider1, collider2, contacts)
+
         return contacts
 
     def Raycast(self, origin, direction, maxDistance=float('inf'), hit=None):  # needs fixing
         return self.__ray_obb_intersection(origin, direction, self.parent.position.to_np(),
-                                           self.parent.quaternion.to_matrix3(self.parent.Cache.R), self.parent.size.to_np() * 0.5)
+                                           self.parent.quaternion.to_matrix3(self.parent.Cache), self.parent.size.to_np() * 0.5)
 
     @staticmethod
     def __generate_contacts(sat_result):
@@ -42,8 +46,8 @@ class BoxCollider(Collider):
         a_center = A.position
         b_center = B.position
 
-        a_axes = A.__get_axes(A.quaternion)
-        b_axes = B.__get_axes(B.quaternion)
+        a_axes = A.__get_axes(A.quaternion, A.parent.Cache)
+        b_axes = B.__get_axes(B.quaternion, B.parent.Cache)
 
         a_half = A.size * 0.5
         b_half = B.size * 0.5
@@ -131,8 +135,8 @@ class BoxCollider(Collider):
         a_center = self.position
         b_center = other_collider.position
 
-        a_axes = self.__get_axes(self.quaternion)
-        b_axes = self.__get_axes(other_collider.quaternion.conjugate())
+        a_axes = self.__get_axes(self.quaternion, self.parent.Cache)
+        b_axes = self.__get_axes(other_collider.quaternion.conjugate(), other_collider.parent.Cache)
 
         a_half = self.size * 0.5
         b_half = other_collider.size * 0.5
@@ -188,8 +192,8 @@ class BoxCollider(Collider):
         }
 
 
-    def __get_axes(self, rotation):
-        R = rotation.to_matrix3(self.parent.Cache.R)
+    def __get_axes(self, rotation, cache=None):
+        R = rotation.to_matrix3(cache)
         return [
             Vector3(*R[:, 0]).normalized(),
             Vector3(*R[:, 1]).normalized(),
@@ -413,6 +417,7 @@ class BoxCollider(Collider):
         return BoxCollider.__ray_box_intersection(self, local_origin, local_dir, box_min, box_max)
 
     def attach(self, owner_object):
+        # super().attach(owner_object)
         box = owner_object.get_component(BoxCollider)  # will remove duplicate renders by default
         if box:
             owner_object.remove_component("Collider")

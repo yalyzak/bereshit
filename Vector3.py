@@ -1,4 +1,6 @@
 import math
+import random
+
 import numpy as np
 from math import sqrt
 from numba import njit
@@ -212,5 +214,6 @@ class Vector3:
     def __MatrixMultiplication(matrix, x, y, z):
         return matrix[0, 0] * x + matrix[0, 1] * y + matrix[0, 2] * z, matrix[1, 0] * x + matrix[1, 1] * y + matrix[1 ,2] * z,matrix[2, 0] * x + matrix[2, 1] * y + matrix[2, 2] * z
 
-
-
+    @classmethod
+    def random(self):
+        return self(random.random(), random.random(), random.random())

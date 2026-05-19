@@ -103,8 +103,8 @@ class Rigidbody:
 
     @staticmethod
     def positional_correction(rb1, rb2, penetration, normal, inv_eff_mass):
-        percent = 0.8  # how aggressively to fix (0.2–0.8 is typical)
-        slop = 0.01  # small tolerance to ignore tiny penetrations
+        percent = 0.11  # how aggressively to fix (0.2–0.8 is typical)
+        slop = 0.05  # small tolerance to ignore tiny penetrations
 
         correction_mag = max(penetration - slop, 0) / inv_eff_mass * percent
         correction = normal * correction_mag
@@ -183,17 +183,25 @@ class Rigidbody:
             rb2.applyTorqueImpulse(negative_impulse, r2)
 
     def integrat(self, dt):
+
         self.acceleration = self.force * self.invMass
 
-        self.angular_acceleration.x = self.torque.x / self.inertia.x
-        self.angular_acceleration.y = self.torque.x / self.inertia.y
-        self.angular_acceleration.z = self.torque.x / self.inertia.x
+        if not self.Freeze_Rotation.x:
+            self.angular_acceleration.x = self.torque.x / self.inertia.x
+        if not self.Freeze_Rotation.y:
+            self.angular_acceleration.y = self.torque.x / self.inertia.y
+        if not self.Freeze_Rotation.z:
+            self.angular_acceleration.z = self.torque.x / self.inertia.x
 
         ang_disp = self.angular_velocity * dt \
                    + 0.5 * self.angular_acceleration * dt * dt
 
         if ang_disp.magnitude() > 0:
             self._update_inertia_world()
+            self.parent.rotation = self.parent.quaternion.to_euler()
+            self.parent.Cache.rotation_dirty = True
+            self.parent.Cache.rotation_dirty_abs = True
+            self.parent.Cache.qunt = self.parent.quaternion * Quaternion.euler_radians(ang_disp)
 
         self.angular_velocity += self.angular_acceleration * dt
 
@@ -330,7 +338,7 @@ class Rigidbody:
             self._Iinv_world = np.zeros((3, 3))
             return None
 
-        R = self.parent.quaternion.to_matrix3(self.parent.Cache.R)
+        R = self.parent.quaternion.to_matrix3(self.parent.Cache)
         self._Iinv_world = R @ self.inverse_inertia @ R.T
 
     def Iinv_world(self):

@@ -1,3 +1,4 @@
+import copy
 import math
 import numpy as np
 from numba import njit
@@ -56,6 +57,11 @@ class Quaternion:
         elif isinstance(other, Quaternion):
             return self * other.inverse()
         raise TypeError("Unsupported type for division")
+
+    def __eq__(self, other):
+        if not isinstance(other, Quaternion):
+            return NotImplemented
+        return (self.x, self.y, self.z, self.w) == (other.x, other.y, other.z, other.w)
 
     def conjugate(self):
         return Quaternion(-self.x, -self.y, -self.z, self.w)
@@ -276,14 +282,21 @@ class Quaternion:
         else:
             return Vector3(self.x / s, self.y / s, self.z / s), angle
 
-    def to_matrix3(self, out):
-        # if out is None:
-        #     out = np.empty((3, 3), dtype=np.float64)
+    def to_matrix3(self, cache=None):
+        if cache is not None:
+            if not cache.rotation_dirty:
+                return cache.R
 
-        x = self.x
-        y = self.y
-        z = self.z
-        w = self.w
+            Quaternion.__to_matrix3(cache.R, self.x, self.y, self.z, self.w)
+            cache.rotation_dirty = False
+            return cache.R
+        arr = np.empty((3, 3), dtype=np.float64)
+        Quaternion.__to_matrix3(arr, self.x, self.y, self.z, self.w)
+        return arr
+
+    @staticmethod
+    @njit
+    def __to_matrix3(out, x, y, z, w):
 
         xx = 2.0 * x * x
         yy = 2.0 * y * y
@@ -308,8 +321,6 @@ class Quaternion:
         out[2, 0] = xz - wy
         out[2, 1] = yz + wx
         out[2, 2] = 1.0 - xx - yy
-
-        return out
 
     def rotate(self, v: Vector3) -> Vector3:
         qx, qy, qz, qw = self.x, self.y, self.z, self.w
@@ -387,7 +398,12 @@ class Quaternion:
     def to_np(self):
         return np.array([self.x, self.y, self.z, self.w], dtype='f4')
 
-    def to_matrix3_abs(self, m):
+    def to_matrix3_abs(self, Cache):
+        if not Cache.rotation_dirty_abs:
+            return Cache.R_abs
+
+        m = Cache.R_abs
+        Cache.rotation_dirty_abs = False
         return Quaternion.__to_matrix3_abs(m, self.x, self.y, self.z, self.w)
 
     @staticmethod

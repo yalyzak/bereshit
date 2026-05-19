@@ -12,8 +12,11 @@ from bereshit.Collider import Collider
 from bereshit.Physics import Physics
 
 logger = logging.getLogger(__name__)
+
+
 class World:
-    def __init__(self, running_flag, children=None, gizmos=False, gravity=Vector3(0, -9.8, 0), tick=1/60, speed=1, physics_epochs=1, scale=1):
+    def __init__(self, running_flag, children=None, gizmos=False, gravity=Vector3(0, -9.8, 0), tick=1 / 60, speed=1,
+                 physics_epochs=1, scale=1):
         self.RunningFlag = running_flag
         self.children = children or []
         cameras = self.search_by_component('Camera')
@@ -37,21 +40,18 @@ class World:
         Collider.Scale = self.scale
         Physics.World = self
 
-
     def add_object(self, object):
         self.children.append(object)
 
     def search_by_component(self, component_name):
-        # Check if this object has the desired component
-        if hasattr(self, "components") and component_name in self.components:
-            return self
+        results = []
+
         # Recursively check children
         if hasattr(self, "children"):
             for child in self.children:
-                result = child.search_by_component(component_name)
-                if result:
-                    return result
-        return []
+                results.extend(child.search_by_component(component_name))
+
+        return results
 
     def search_by_name(self, object_name):
         for child in self.children:
@@ -117,42 +117,31 @@ class World:
     def solve_collectionsFirstIteration(self, children, dt):
 
         contacts = []
-        # STEP 1: Collect all contacts (use ALL manifold points)
-        for i in range(len(children)):
-            first_obj = children[i]
-            first_rb = first_obj.get_component("Rigidbody")
-            first_collider = first_obj.get_component("Collider")
-            collided_a = False
-            for j in range(i + 1, len(children)):
-                second_obj = children[j]
-                second_rb = second_obj.get_component("Rigidbody")
-                second_collider = second_obj.get_component("Collider")
-                collided_b = False
+        colliders = [obj.Collider for obj in children]
+        candidate_pairs = Collider.sweep_and_prune(colliders)
 
-                # Skip if neither has a Rigidbody or both are kinematic
-                if (first_rb is None or first_rb.isKinematic) and (second_rb is None or second_rb.isKinematic):
-                    continue
+        for Collider1, Collider2 in candidate_pairs:
+            # Skip if neither has a Rigidbody or both are kinematic
+            rb1 = Collider1.parent.get_component("Rigidbody")
+            rb2 = Collider2.parent.get_component("Rigidbody")
 
-                result = first_collider.__class__.check_collision(first_collider, second_collider, single_point=False, collided_a=collided_a,
-                                                        collided_b=collided_b)
-                if result is None:
-                    continue
-                contacts2 = []
-                collided_a, collided_b = True, True
-                rb1, rb2 = first_rb, second_rb
+            if rb1.isKinematic and rb2.isKinematic:
+                continue
 
+            result = Collider1.__class__.check_collision(Collider1, Collider2)
+            if result is None:
+                continue
 
-                for contact_point in result.contact_points:
-                    Rigidbody.solve_impulse(rb1, rb2, contact_point, result.normal, result.depth, dt, apply_friction=True)
+            for contact_point in result.contact_points:
+                Rigidbody.solve_impulse(rb1, rb2, contact_point, result.normal, result.depth, dt, apply_friction=True)
 
-                    contacts.append({
-                        "rb1": rb1,
-                        "rb2": rb2,
-                        "normal": result.normal,
-                        "penetration": result.depth,
-                        "contact_point": contact_point,
-                    })
-
+                contacts.append({
+                    "rb1": rb1,
+                    "rb2": rb2,
+                    "normal": result.normal,
+                    "penetration": result.depth,
+                    "contact_point": contact_point,
+                })
 
         if self.gizmos:
             self.set_gizmos(contacts=contacts)  # needs Updating/Fixing
@@ -194,7 +183,8 @@ class World:
     def CallChildrenPhysicsUpdate(children, dt):
         for child in children:
             for component in child.components.values():
-                if hasattr(component, 'PhysicsUpdate') and component.PhysicsUpdate is not None and component.Active == True:
+                if hasattr(component,
+                           'PhysicsUpdate') and component.PhysicsUpdate is not None and component.Active == True:
                     try:
                         component.PhysicsUpdate(dt)
                     except Exception as e:
@@ -215,7 +205,7 @@ class World:
         contacts = self.solve_collectionsFirstIteration(children, dt)  # handel collisions and friction
         joints = self.solve_jointsFirstIteration(children, dt)
 
-        for _ in range(self.physics_epochs - 1):  # keeps Constraint inline
+        for i in range(self.physics_epochs - 1):  # keeps Constraint inline
             self.solve_collections(contacts, dt)  # handel collisions and friction
             self.solve_joints(joints, dt)
 
@@ -233,9 +223,6 @@ class World:
 
                 if not rb.isKinematic:
                     child.Rigidbody.integrat(dt)
-
-        for child in allchildren:
-            child.rotation = child.quaternion.to_euler()
 
     def Exit(self, code=None):
         self.RunningFlag[0] = True

@@ -28,6 +28,7 @@ class HingeJoint(Joint):
         self.friction_coefficient = friction_coefficient
         self.max_rotation = max_rotation
         self.min_rotation = min_rotation
+        self.J = np.empty((2, 3), dtype=float)
 
 
     def __cast_anchor_default(self):
@@ -115,14 +116,14 @@ class HingeJoint(Joint):
         rel_w = b.angular_velocity - a.angular_velocity
 
         # Construct the 2-row Jacobian: J = [t1^T; t2^T]
-        J = np.array([t1.to_np(), t2.to_np()])  # (2, 3)
+        self.J[0], self.J[1] = t1.to_np, t2.to_np
 
         # Effective mass:  K_ang = J * (IinvA + IinvB) * J^T   (2x2)
         K_full = IinvA + IinvB  # (3, 3)
-        K_ang = J @ K_full @ J.T  # (2, 2)
+        K_ang = self.J @ K_full @ self.J.T  # (2, 2)
 
         # Velocity error projected onto the two constrained directions
-        vel_error = J @ rel_w.to_np()  # (2,)
+        vel_error = self.J @ rel_w.to_np()  # (2,)
 
         # Baumgarte angular correction
         q_rel = self.body_a.quaternion.inverse() * self.body_b.quaternion
@@ -139,13 +140,13 @@ class HingeJoint(Joint):
 
         # Project the angular error onto the two constrained axes
 
-        bias = J @ ang_error.to_np() * (self.beta / dt)  # (2,)
+        bias = self.J @ ang_error.to_np() * (self.beta / dt)  # (2,)
 
         # Solve for the 2D impulse
         ang_impulse_2d = -Joint.solve2x2(K_ang, vel_error + bias)  # (2,)
 
         # Expand back to 3D: impulse = t1 * lambda1 + t2 * lambda2
-        ang_impulse_np = J.T @ ang_impulse_2d  # (3,)
+        ang_impulse_np = self.J.T @ ang_impulse_2d  # (3,)
         ang_impulse = Vector3.from_np(ang_impulse_np)
 
         # Apply angular impulse

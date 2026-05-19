@@ -16,6 +16,8 @@ class Collider:
         self.is_trigger = is_trigger
         self.enter = False
         self.stay = False
+        self.other = None
+
 
     @property
     def size(self):
@@ -30,7 +32,7 @@ class Collider:
         return self.__delta_quaternion * self.parent.quaternion
 
     @staticmethod
-    def check_collision(collider1, collider2, single_point=False, collided_a=True, collided_b=True):
+    def check_collision(collider1, collider2, single_point=False):
         pass
 
     @staticmethod
@@ -49,7 +51,7 @@ class Collider:
         # Half extents
         half = self.size * 0.5
 
-        abs_rot = self.quaternion.to_matrix3_abs(self.parent.Cache.R)
+        abs_rot = self.quaternion.to_matrix3_abs(self.parent.Cache)
 
         # Compute world extents
         world_half = half.MatrixMultiplication(abs_rot)
@@ -90,16 +92,19 @@ class Collider:
                 component.OnTriggerEnter(collision)
 
     @staticmethod
-    def handle_collision_exit(self, other_collider, collided_a, collided_b):
+    def handle_collision_exit(self, other_collider):
         collision1 = Collision(self, None)
         collision2 = Collision(other_collider, None)
-        if (self.stay or self.enter) and not collided_a:
+        if (self.stay or self.enter) and self.other == collision2:
             self.OnCollisionExit(collision2)
-        if (other_collider.stay or other_collider.enter) and not collided_b:
+        if (other_collider.stay or other_collider.enter) and self.other == collision1:
             other_collider.OnCollisionExit(collision1)
 
     @staticmethod
     def handle_collision_events(self, other_collider, result):
+        self.other = other_collider
+        other_collider.other = self
+
         collision1 = Collision(self, result)
         collision2 = Collision(other_collider, result)
 
@@ -119,6 +124,72 @@ class Collider:
     def Raycast(self, origin, direction, maxDistance=float('inf'), hit=None):
         print(f"Ray casting was not defined for {self.__class__.__name__}")
         return RaycastHit()
+
+
+    @staticmethod
+    def sweep_and_prune(colliders):
+        """
+        Broad-phase Sweep and Prune collision detection.
+
+        Args:
+            colliders: iterable of collider objects
+                       each collider must implement:
+                           get_aabb() -> (min_vec, max_vec)
+
+                       where min_vec/max_vec have:
+                           .x .y .z
+
+        Returns:
+            List of tuples:
+                [(collider_a, collider_b), ...]
+        """
+
+        endpoints = []
+
+        # Build X-axis endpoints
+        for collider in colliders:
+            min_v, max_v = collider.get_aabb()
+
+            endpoints.append((min_v.x, True, collider))  # start
+            endpoints.append((max_v.x, False, collider))  # end
+
+        # Sort endpoints by position
+        endpoints.sort(key=lambda e: e[0])
+
+        active = set()
+        candidate_pairs = []
+
+        # Sweep along X
+        for _, is_start, collider in endpoints:
+
+            if is_start:
+                # Compare against active colliders
+                min_a, max_a = collider.get_aabb()
+
+                for other in active:
+                    min_b, max_b = other.get_aabb()
+
+                    # Check Y overlap
+                    overlap_y = (
+                            min_a.y <= max_b.y and
+                            max_a.y >= min_b.y
+                    )
+
+                    # Check Z overlap
+                    overlap_z = (
+                            min_a.z <= max_b.z and
+                            max_a.z >= min_b.z
+                    )
+
+                    if overlap_y and overlap_z:
+                        candidate_pairs.append((collider, other))
+
+                active.add(collider)
+
+            else:
+                active.remove(collider)
+
+        return candidate_pairs
 
 
 class ContactPoints:

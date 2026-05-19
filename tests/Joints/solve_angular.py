@@ -15,8 +15,8 @@ knee = Object(position=Vector3(0,9,0), size=Vector3(.5, .5, .5)).add_component(B
 joint = knee.get_component(HingeJoint)
 
 for i in range(1000000):
-    joint.solve_linear(1/60)
+    joint.solve_angular(1/60)
 
 
-print(time.process_time() - start) # 13.2
+print(time.process_time() - start) # 13.4
 
