@@ -143,7 +143,7 @@ class Vector3:
         return start + (end - start) * t
 
     def magnitude(self):
-        return (self.x ** 2 + self.y ** 2 + self.z ** 2) ** 0.5
+        return sqrt(self.x * self.x + self.y * self.y + self.z * self.z)
 
     def normalized(self):
         mag = self.magnitude()
