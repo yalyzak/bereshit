@@ -1,5 +1,7 @@
 import math
 import copy
+
+import numpy as np
 import trimesh
 import moderngl
 from PIL import Image
@@ -92,7 +94,7 @@ class MeshRander:
         if size:
             self._size = size.to_np()
         else:
-            self._size = Vector3(1,1,1).to_np()
+            self._size = np.ones(3)
         self.ctx = moderngl.create_standalone_context()
         self._vertices = vertices
         self._edges = edges
