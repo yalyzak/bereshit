@@ -28,6 +28,9 @@ class BoxCollider(Collider):
 
         BoxCollider.handle_collision_events(collider1, collider2, contacts)
 
+        if collider1.is_trigger or collider2.is_trigger:
+            return None
+
         return contacts
 
     def Raycast(self, origin, direction, maxDistance=float('inf'), hit=None):  # needs fixing
