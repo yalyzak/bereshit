@@ -21,7 +21,7 @@ class BoxCollider(Collider):
         sat_result = collider1.__SAT(collider2)
         if sat_result is None:
             collider1.handle_collision_exit()
-            collider2.handle_collision_exit()#
+            collider2.handle_collision_exit()
             return None
 
         contacts = BoxCollider.__generate_contacts(sat_result)
