@@ -99,14 +99,11 @@ class Collider:
             if hasattr(component, 'OnTriggerEnter') and component.OnTriggerEnter is not None and component != self:
                 component.OnTriggerEnter(collision)
 
-    @staticmethod
-    def handle_collision_exit(self, other_collider):
-        collision1 = Collision(self, None)
-        collision2 = Collision(other_collider, None)
-        if (self.stay or self.enter) and self.other == collision2:
-            self.OnCollisionExit(collision2)
-        if (other_collider.stay or other_collider.enter) and self.other == collision1:
-            other_collider.OnCollisionExit(collision1)
+    def handle_collision_exit(self):
+        collision = Collision(self.other, None)
+        if self.stay or self.enter:
+            self.OnCollisionExit(collision)
+
 
     @staticmethod
     def handle_collision_events(self, other_collider, result):

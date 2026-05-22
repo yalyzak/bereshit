@@ -14,12 +14,14 @@ class BoxCollider(Collider):
         aabb_hit = BoxCollider.aabb_collision(collider1, collider2)
 
         if not aabb_hit:
-            BoxCollider.handle_collision_exit(collider1, collider2)
+            collider1.handle_collision_exit()
+            collider2.handle_collision_exit()
             return None
 
         sat_result = collider1.__SAT(collider2)
         if sat_result is None:
-            BoxCollider.handle_collision_exit(collider1, collider2)
+            collider1.handle_collision_exit()
+            collider2.handle_collision_exit()
             return None
 
         contacts = BoxCollider.__generate_contacts(sat_result)

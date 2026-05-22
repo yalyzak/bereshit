@@ -121,6 +121,10 @@ class World:
         candidate_pairs = Collider.sweep_and_prune(colliders)
 
         for Collider1, Collider2 in candidate_pairs:
+            if Collider2 in colliders:
+                colliders.remove(Collider2)
+            if Collider1 in colliders:
+                colliders.remove(Collider1)
             # Skip if neither has a Rigidbody or both are kinematic
             rb1 = Collider1.parent.get_component("Rigidbody")
             rb2 = Collider2.parent.get_component("Rigidbody")
@@ -142,6 +146,9 @@ class World:
                     "penetration": result.depth,
                     "contact_point": contact_point,
                 })
+
+        for collider in colliders:
+            collider.handle_collision_exit()
 
         if self.gizmos:
             self.set_gizmos(contacts=contacts)  # needs Updating/Fixing
