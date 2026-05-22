@@ -26,7 +26,8 @@ class BoxCollider(Collider):
 
         contacts = BoxCollider.__generate_contacts(sat_result)
 
-        BoxCollider.handle_collision_events(collider1, collider2, contacts)
+        collider1.handle_collision_events(collider2, contacts)
+        collider2.handle_collision_events(collider1, contacts)
 
         if collider1.is_trigger or collider2.is_trigger:
             return None

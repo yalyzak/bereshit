@@ -1,10 +1,9 @@
 class debug:
     def OnCollisionEnter(self, Collision):
         print("entered", Collision.other.parent.name)
-        # if Collision.other.parent.name == "floor":
-        #     print(self.parent.name, "floor")
-        # if Collision.other.parent.name == "obj":
-        #     print(self.parent.name, "obj")
+
+    def OnCollisionStay(self, Collision):
+        print("stay", Collision.other.parent.name)
 
     def OnCollisionExit(self, Collision):
         print("exited", Collision.other.parent.name)

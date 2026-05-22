@@ -71,9 +71,7 @@ class Collider:
         return self.position - self.half_size, self.position + self.half_size
 
     def OnCollisionEnter(self, collision):
-
         self.enter = True
-
         for component in self.parent.components.values():
             if hasattr(component, 'OnCollisionEnter') and component.OnCollisionEnter is not None and component != self:
                 component.OnCollisionEnter(collision)
@@ -88,43 +86,57 @@ class Collider:
     def OnCollisionExit(self, collision):
         self.enter = False
         self.stay = False
-
         for component in self.parent.components.values():
             if hasattr(component, 'OnCollisionExit') and component.OnCollisionExit is not None and component != self:
                 component.OnCollisionExit(collision)
 
     def OnTriggerEnter(self, collision):
         """This method can be overwritten by subclasses to handle trigger events."""
+        self.enter = True
         for component in self.parent.components.values():
             if hasattr(component, 'OnTriggerEnter') and component.OnTriggerEnter is not None and component != self:
                 component.OnTriggerEnter(collision)
 
+    def OnTriggerStay(self, collision):
+        self.enter = False
+        self.stay = True
+        for component in self.parent.components.values():
+            if hasattr(component, 'OnTriggerStay') and component.OnTriggerStay is not None and component != self:
+                component.OnTriggerStay(collision)
+
+    def OnTriggerExit(self, collision):
+        self.stay = False
+        self.enter = False
+        """This method can be overwritten by subclasses to handle trigger events."""
+        for component in self.parent.components.values():
+            if hasattr(component, 'OnTriggerExit') and component.OnTriggerExit is not None and component != self:
+                component.OnTriggerExit(collision)
+
     def handle_collision_exit(self):
         collision = Collision(self.other, None)
-        if self.stay or self.enter:
-            self.OnCollisionExit(collision)
+        if not self.is_trigger:
+            if self.stay or self.enter:
+                self.OnCollisionExit(collision)
+        else:
+            if self.stay or self.enter:
+                self.OnTriggerExit(collision)
 
 
-    @staticmethod
     def handle_collision_events(self, other_collider, result):
         self.other = other_collider
-        other_collider.other = self
 
-        collision1 = Collision(self, result)
-        collision2 = Collision(other_collider, result)
+        collision = Collision(other_collider, result)
+        if not self.is_trigger:
+            if self.enter or self.stay:
+                self.OnCollisionStay(collision)
+            else:
+                self.OnCollisionEnter(collision)
+        else:
+            if self.enter or self.stay:
+                self.OnTriggerStay(collision)
+            else:
+                self.OnTriggerEnter(collision)
 
-        if self.is_trigger:
-            self.OnTriggerEnter(collision2)
-        if other_collider.is_trigger:
-            other_collider.OnTriggerEnter(collision1)
-        if self.enter == False:
-            self.OnCollisionEnter(collision2)
-        else:
-            self.OnCollisionStay(collision2)
-        if other_collider.enter == False:
-            other_collider.OnCollisionEnter(collision1)
-        else:
-            other_collider.OnCollisionStay(collision1)
 
     def Raycast(self, origin, direction, maxDistance=float('inf'), hit=None):
         print(f"Ray casting was not defined for {self.__class__.__name__}")
