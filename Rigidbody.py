@@ -189,9 +189,9 @@ class Rigidbody:
         if not self.Freeze_Rotation.x:
             self.angular_acceleration.x = self.torque.x / self.inertia.x
         if not self.Freeze_Rotation.y:
-            self.angular_acceleration.y = self.torque.x / self.inertia.y
+            self.angular_acceleration.y = self.torque.y / self.inertia.y
         if not self.Freeze_Rotation.z:
-            self.angular_acceleration.z = self.torque.x / self.inertia.x
+            self.angular_acceleration.z = self.torque.z / self.inertia.z
 
         ang_disp = self.angular_velocity * dt + 0.5 * self.angular_acceleration * dt * dt
 
