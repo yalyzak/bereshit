@@ -10,3 +10,8 @@ class Cache:
         self.rotation_dirty = True
         self.rotation_dirty_abs = True
         self.aabb_dirty = True
+
+    def set_dirty(self):
+        self.rotation_dirty = True
+        self.rotation_dirty_abs = True
+        self.aabb_dirty = True

@@ -386,6 +386,7 @@ class Object:
             self.Rigidbody.velocity = Vector3(0, 0, 0)
             self.Rigidbody.angular_velocity = Vector3(0, 0, 0)
             self.Rigidbody.angular_acceleration = Vector3(0, 0, 0)
+            self.Cache.set_dirty()
 
         for child in self.children:
             child.reset_to_default()

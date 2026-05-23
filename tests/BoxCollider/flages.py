@@ -18,4 +18,6 @@ floor = Object(size=Vector3(10, 1, 10), position=Vector3(0, -1, 0), name="floor"
 
 obj = Object(position=Vector3(0, 2, 0), name="obj").add_component(BoxCollider(), Rigidbody(), debug())
 
-Core.run([cam, floor, obj])
+obj2 = Object(position=Vector3(0, 2, 1), name="obj2").add_component(BoxCollider(), Rigidbody())
+
+Core.run([cam, floor, obj, obj2])

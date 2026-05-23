@@ -123,16 +123,16 @@ class Collider:
 
 
     def handle_collision_events(self, other_collider, result):
+        same_collider = self.other == other_collider
         self.other = other_collider
-
         collision = Collision(other_collider, result)
         if not self.is_trigger:
-            if self.enter or self.stay:
+            if (self.enter or self.stay) and same_collider:
                 self.OnCollisionStay(collision)
             else:
                 self.OnCollisionEnter(collision)
         else:
-            if self.enter or self.stay:
+            if (self.enter or self.stay) and same_collider:
                 self.OnTriggerStay(collision)
             else:
                 self.OnTriggerEnter(collision)
