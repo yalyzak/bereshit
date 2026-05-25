@@ -95,7 +95,6 @@ class MeshRander:
             self._size = size.to_np()
         else:
             self._size = np.ones(3)
-        self.ctx = moderngl.create_standalone_context()
         self._vertices = vertices
         self._edges = edges
         self._triangles = triangles
