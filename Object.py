@@ -378,6 +378,15 @@ class Object:
     def get_default_quaternion(self):
         return copy.copy(self.__default_quaternion)
 
+    def Call_reset_to_default(self):
+        for component in self.components.values():
+            if hasattr(component, 'Reset') and component.Reset is not None and component.Active == True:
+                try:
+                    component.Reset()
+                except Exception as e:
+                    print(f"[Error] Exception in {component.__class__.__name__}.Reset(): {e}")
+                    traceback.print_exc()
+
     def reset_to_default(self):
         self.position = self.get_default_position()
         self.quaternion = self.get_default_quaternion()
@@ -387,6 +396,8 @@ class Object:
             self.Rigidbody.angular_velocity = Vector3(0, 0, 0)
             self.Rigidbody.angular_acceleration = Vector3(0, 0, 0)
             self.Cache.set_dirty()
+
+        self.Call_reset_to_default()
 
         for child in self.children:
             child.reset_to_default()
