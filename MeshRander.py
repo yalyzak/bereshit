@@ -3,7 +3,6 @@ import copy
 
 import numpy as np
 import trimesh
-import moderngl
 from PIL import Image
 
 from bereshit.Vector3 import Vector3
