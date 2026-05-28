@@ -6,3 +6,5 @@ glfw
 open3d
 trimesh
 numba
+keyboard
+mouse

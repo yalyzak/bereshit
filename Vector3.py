@@ -220,3 +220,12 @@ class Vector3:
 
     def copy(self):
         return Vector3(self.x, self.y, self.z)
+
+    @classmethod
+    def average(cls, vectors):
+        average = cls()
+        length = len(vectors)
+        for vector in vectors:
+            average += vector
+        return average / length
+
