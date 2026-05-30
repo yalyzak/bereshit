@@ -63,6 +63,13 @@ class Object:
 
         return local_offset
 
+    @property
+    def local_rotation(self):
+        if self.parent is None:
+            return copy.copy(self.rotation)
+
+        return (self.parent.quaternion.inverse() * self.quaternion).to_euler()
+
     @local_position.setter
     def local_position(self, new_local_position):
         old_world_position = copy.copy(self.position)
@@ -92,11 +99,9 @@ class Object:
     def set_default_position(self):
         self.__default_position = copy.deepcopy(self.position)
 
-
     def set_default(self):
         self.set_default_quaternion()
         self.set_default_position()
-
 
     def __copy__(self):
         return Object(self.value)
@@ -119,7 +124,6 @@ class Object:
         obj_copy.__default_position = copy.deepcopy(self.__default_position, memo)
         obj_copy.__default_quaternion = copy.deepcopy(self.__default_quaternion, memo)
         obj_copy.Cache = copy.deepcopy(self.Cache, memo)
-
 
         # 4. Copy children (MANUALLY to control parent)
         obj_copy.children = []
@@ -206,7 +210,6 @@ class Object:
         self.name = name
         self.size = Size(*size) if isinstance(size, tuple) else size or Size()
         self.components = {}
-        self.local_rotation = LocalRotation()
 
         for child in self.children:
             if isinstance(child, Object):
@@ -219,18 +222,19 @@ class Object:
 
         self.__default_rotation = copy.copy(self.rotation)
 
-
         self.world = None
 
         self.quaternion = Quaternion.euler(self.rotation) if not quaternion else quaternion
 
         self.__default_quaternion = copy.copy(self.quaternion)
 
+        self.up = self.quaternion.rotate(Vector3(0, 1, 0))
+        self.forward = self.quaternion.rotate(Vector3(0, 0, 1))
+
         self.add_component(Material())
         self.add_component(MeshRander(shape="box"))
 
         self.Cache = Cache()
-
 
     def search(self, target_name):
         if hasattr(self, 'name') and self.name == target_name:

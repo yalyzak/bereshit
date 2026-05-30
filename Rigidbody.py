@@ -195,16 +195,18 @@ class Rigidbody:
 
         ang_disp = self.angular_velocity * dt + 0.5 * self.angular_acceleration * dt * dt
 
+        self.angular_velocity += self.angular_acceleration * dt
+
+        self.parent.quaternion *= Quaternion.euler_radians(ang_disp)
+
         if ang_disp.magnitude() > 0:
             self._update_inertia_world()
             self.parent.rotation = self.parent.quaternion.to_euler()
             self.parent.Cache.rotation_dirty = True
             self.parent.Cache.rotation_dirty_abs = True
             self.parent.Cache.aabb_dirty = True
-
-        self.angular_velocity += self.angular_acceleration * dt
-
-        self.parent.quaternion *= Quaternion.euler_radians(ang_disp)
+            self.parent.up = self.parent.quaternion.rotate(Vector3(0, 1, 0))
+            self.parent.forward = self.parent.quaternion.rotate(Vector3(0, 0, 1))
 
         old_pos = self.parent.position.copy()
 
