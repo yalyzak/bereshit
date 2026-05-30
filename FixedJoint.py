@@ -1,22 +1,13 @@
-import numpy as np
 from bereshit.Vector3 import Vector3
 from bereshit.Joint import Joint
 
 
 class FixedJoint(Joint):
 
-    def cast_anchor(self):
-        self.world_anchor = (self.body_a.position + self.body_b.position) * 0.5
-        # Store the initial relative rotation so we can measure drift
-        self.initial_rel_rot = (self.body_a.quaternion.inverse() * self.body_b.quaternion)
-
-        self.local_anchor_a = self.body_a.quaternion.rotate_conjugated(self.world_anchor - self.body_a.position)
-        self.local_anchor_b = self.body_b.quaternion.rotate_conjugated(self.world_anchor - self.body_b.position)
-
     def solve_linear(self, dt):
         a, b = self.rbA, self.rbB
 
-        IinvA = a.Iinv_world()  # already returns zeros for kinematic
+        IinvA = a.Iinv_world()
         IinvB = b.Iinv_world()
 
         inv_mA = a.invMass
@@ -42,23 +33,18 @@ class FixedJoint(Joint):
         #                                             + [rB]x * IinvB * [rB]x^T
         inv_mass = inv_mA + inv_mB
 
-        K = Joint.build_effective_mass_matrix(inv_mass, rA, rB, IinvA, IinvA, self.K)
+        K = Joint.build_effective_mass_matrix(inv_mass, rA, rB, IinvA, IinvB, self.K)
 
         # Solve  K * impulse = -(dv + bias)
         impulse_np = -Joint.solve3x3(K, (dv + bias).to_np())
         impulse = Vector3.from_np(impulse_np)
 
-        # Apply linear impulse
         if not a.isKinematic:
             a.velocity -= impulse * inv_mA
-        if not b.isKinematic:
-            b.velocity += impulse * inv_mB
-
-        # Apply angular impulse from the lever arms
-        if not a.isKinematic:
             a.angular_velocity += rA.cross(impulse).MatrixMultiplication(IinvA)
 
         if not b.isKinematic:
+            b.velocity += impulse * inv_mB
             b.angular_velocity -= rB.cross(impulse).MatrixMultiplication(IinvB)
 
     def solve_angular(self, dt):
