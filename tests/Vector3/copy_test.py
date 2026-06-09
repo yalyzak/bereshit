@@ -1,4 +1,4 @@
-import copy
+import copy_test
 
 from bereshit import Vector3
 import time
