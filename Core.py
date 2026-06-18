@@ -9,12 +9,14 @@ from bereshit import Object, render, World, Vector3, Physics
 # import old_render as render
 
 
-def run(scene,speed=1, gizmos=False, scriptRefreshRate=60,tick=1/60, Render=True, ForceRenderInitialize=True, gravity=Vector3(0,-9.8,0), physics_epochs=10, scale=1, MaxTime=None):
+def run(scene,speed=1, gizmos=False, scriptRefreshRate=None,tick=1/60, Render=True, ForceRenderInitialize=True, gravity=Vector3(0,-9.8,0), physics_epochs=10, scale=1, MaxTime=None):
     Exit = [False]
     if not Render:
         ForceRenderInitialize = False
-
-
+    if scriptRefreshRate is None:
+        scriptRefreshRate = (1 / 30) / tick
+    else:
+        scriptRefreshRate = scriptRefreshRate / tick
     TARGET_FPS = 60
     # bereshit.dt = TARGET_FPS * 0.000165
 

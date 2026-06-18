@@ -76,10 +76,12 @@ class Object:
 
         if self.parent is None:
             self.position = copy.copy(new_local_position)
+            self.Cache.set_dirty()
         else:
             # Convert local position to world position
             world_offset = self.parent.quaternion.rotate(new_local_position)
             self.position = self.parent.position + world_offset
+            self.Cache.set_dirty()
 
         # World-space movement delta
         world_delta = self.position - old_world_position

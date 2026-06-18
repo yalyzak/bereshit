@@ -198,7 +198,7 @@ class World:
                         print(f"[Error] Exception in {component.__class__.__name__}.PhysicsUpdate(): {e}")
                         traceback.print_exc()
 
-    def update(self, check=True, gizmos=False):
+    def update(self, check=False, gizmos=False):
         dt = self.tick
         FirstIteration = True
         allchildren = self.get_all_children()
