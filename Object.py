@@ -70,6 +70,30 @@ class Object:
 
         return (self.parent.quaternion.inverse() * self.quaternion).to_euler()
 
+    @local_rotation.setter
+    def local_rotation(self, new_local_rotation):
+        old_world_rot = self.quaternion
+
+        local_quat = Quaternion.euler(new_local_rotation)
+
+        if self.parent is None:
+            self.quaternion = local_quat
+        else:
+            self.quaternion = self.parent.quaternion * local_quat
+
+        rotation_delta = self.quaternion * old_world_rot.inverse()
+
+        for child in self.children:
+            offset = child.position - self.position
+            child.position = self.position + rotation_delta.rotate(offset)
+
+            # rotate child's orientation too
+            child.quaternion = rotation_delta * child.quaternion
+
+            child.Cache.set_dirty()
+
+        self.Cache.set_dirty()
+
     @local_position.setter
     def local_position(self, new_local_position):
         old_world_position = copy.copy(self.position)
